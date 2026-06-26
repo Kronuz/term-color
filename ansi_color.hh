@@ -101,11 +101,15 @@ class ansi_color {
 				) + (max > 192 ? 8 : 0)
 			)
 		));
+		// Map the 0-15 palette index to a real ANSI 16-color foreground SGR:
+		// indices 0-7 -> 30-37 (normal), indices 8-15 -> 90-97 (bright). A
+		// genuine 16-color terminal understands these; it would ignore 38;5;n.
+		constexpr uint8_t sgr = static_cast<uint8_t>(color < 8 ? (30 + color) : (90 + (color - 8)));
 		constexpr auto standard16 = (
 			static_string::string(ESC "[") +
 			static_string::explode<bold>::value +
-			";38;5;" +
-			static_string::explode<color>::value +
+			";" +
+			static_string::explode<sgr>::value +
 			"m"
 		);
 		return standard16;

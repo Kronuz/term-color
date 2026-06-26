@@ -143,7 +143,11 @@ class color {
 				) + (max > 192 ? 8 : 0)
 			)
 		));
-		auto standard16 = std::format(ESC "[{};38;5;{}m", bold ? 1 : 0, color);
+		// Map the 0-15 palette index to a real ANSI 16-color foreground SGR:
+		// indices 0-7 -> 30-37 (normal), indices 8-15 -> 90-97 (bright). A
+		// genuine 16-color terminal understands these; it would ignore 38;5;n.
+		uint8_t sgr = static_cast<uint8_t>(color < 8 ? (30 + color) : (90 + (color - 8)));
+		auto standard16 = std::format(ESC "[{};{}m", bold ? 1 : 0, sgr);
 		return standard16;
 	}
 
