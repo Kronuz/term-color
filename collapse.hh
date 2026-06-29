@@ -136,4 +136,66 @@ inline std::string collapse(std::string_view s, depth d) {
 	return out;
 }
 
+
+// --- gating + one-call resolution --------------------------------------------
+//
+// detect_depth() and collapse() are the primitives. These compose them into the
+// whole "should I color, and at what tier?" policy a consumer (e.g. a logger sink)
+// needs, so the NO_COLOR / tty / mode handling lives here in one place rather than
+// being re-implemented by every consumer.
+
+// When to colorize, mirroring the conventional `--color=<mode>` flag.
+enum class mode {
+	automatic,  // color only when the sink is a terminal and NO_COLOR is unset/empty
+	always,     // force color, overriding the tty check and NO_COLOR
+	never,      // never color
+};
+
+// What to target when colorizing.
+enum class target {
+	automatic,  // detect the tier from the terminal (COLORTERM / TERM)
+	ansi16,
+	ansi256,
+	truecolor,
+	stacked,    // do not collapse: emit all three stacked tiers; the terminal picks
+};
+
+// NO_COLOR disables color when present and not an empty string; its value does not
+// matter (https://no-color.org). (Named no_color_set rather than no_color to avoid
+// ansi_color.hh's function-like `no_color()` macro.)
+inline bool no_color_set() noexcept {
+	const char* nc = std::getenv("NO_COLOR");
+	return nc != nullptr && nc[0] != '\0';
+}
+
+// Whether to colorize at all, from the mode, NO_COLOR, and whether the sink is a
+// terminal. `automatic` is tty-gated and honors NO_COLOR; `always` forces color and
+// overrides both; `never` never colors.
+inline bool colorize(mode m, bool is_terminal) noexcept {
+	switch (m) {
+		case mode::never:  return false;
+		case mode::always: return true;
+		case mode::automatic:
+		default:           return !no_color_set() && is_terminal;
+	}
+}
+
+// Produce terminal-ready bytes for `s` under (mode, target, is_terminal): strip all
+// color when gated off, pass the stack through untouched for `stacked`, otherwise
+// collapse to the requested tier (or the terminal's detected tier for `automatic`).
+// NO_COLOR is handled by the gate, so the depth detection here ignores it.
+inline std::string apply(std::string_view s, mode m, target t, bool is_terminal) {
+	if (!colorize(m, is_terminal)) {
+		return collapse(s, depth::none);
+	}
+	if (t == target::stacked) {
+		return std::string(s);
+	}
+	depth d = t == target::ansi16 ? depth::ansi16
+		: t == target::ansi256 ? depth::ansi256
+		: t == target::truecolor ? depth::truecolor
+		: detect_depth(false);   // target::automatic
+	return collapse(s, d);
+}
+
 }  // namespace term_color

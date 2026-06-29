@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 
@@ -236,6 +237,49 @@ static void test_collapse() {
 }
 
 
+// ---------------------------------------------------------------------------
+// Runtime: the gating + one-call resolution (mode / target / NO_COLOR / apply).
+// ---------------------------------------------------------------------------
+
+static void test_apply() {
+	std::string line = std::string(kStacked.c_str()) + "x" + std::string(CLEAR_COLOR);
+
+	// never -> stripped, regardless of terminal or target.
+	assert(term_color::apply(line, term_color::mode::never, term_color::target::truecolor, true)
+	       .find('\033') == std::string::npos);
+
+	// automatic + not a terminal -> stripped.
+	assert(term_color::apply(line, term_color::mode::automatic, term_color::target::automatic, false)
+	       .find('\033') == std::string::npos);
+
+	// always + truecolor -> collapsed to the truecolor tier (even to a non-tty).
+	auto tc = term_color::apply(line, term_color::mode::always, term_color::target::truecolor, false);
+	assert(tc.find("38;2;63;119;179") != std::string::npos);
+	assert(tc.find("38;5;") == std::string::npos);
+
+	// stacked -> passed through unchanged (all three tiers survive).
+	assert(term_color::apply(line, term_color::mode::always, term_color::target::stacked, true) == line);
+
+	// always + ansi16 -> only the 16-color tier remains.
+	auto c16 = term_color::apply(line, term_color::mode::always, term_color::target::ansi16, true);
+	assert(c16.find("38;2;") == std::string::npos && c16.find("38;5;") == std::string::npos);
+	assert(c16.find('\033') != std::string::npos);
+
+	// NO_COLOR (present, non-empty) suppresses color in automatic mode; an explicit
+	// `always` overrides it; an *empty* NO_COLOR does not suppress (per the convention).
+	setenv("NO_COLOR", "1", 1);
+	assert(term_color::no_color_set());
+	assert(!term_color::colorize(term_color::mode::automatic, true));
+	assert(term_color::colorize(term_color::mode::always, true));
+	setenv("NO_COLOR", "", 1);
+	assert(!term_color::no_color_set());
+	assert(term_color::colorize(term_color::mode::automatic, true));
+	unsetenv("NO_COLOR");
+
+	std::printf("apply OK: mode gating, NO_COLOR (present/non-empty), tier collapse, stacked pass-through\n");
+}
+
+
 int main() {
 	test_named_colors();
 	test_16color_downgrade_tier();
@@ -243,6 +287,7 @@ int main() {
 	test_hsv2rgb();
 	test_color_class();
 	test_collapse();
+	test_apply();
 	std::printf("all term-color tests passed (stacked %zu bytes, compile-time)\n", kStacked.size());
 	return 0;
 }
