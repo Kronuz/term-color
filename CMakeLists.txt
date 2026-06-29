@@ -38,4 +38,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_executable(term_color_test test/test.cc)
   target_link_libraries(term_color_test PRIVATE term_color)
   add_test(NAME term_color COMMAND term_color_test)
+
+  # Prove the full stacked truecolor sequence is a compile-time literal embedded
+  # in the binary (not reconstructed at runtime): grep the built executable for
+  # the truecolor tier's bytes. If the constexpr stacking ever regressed to a
+  # runtime build, these bytes would not appear as a contiguous literal.
+  add_test(NAME term_color_binary_has_stack
+    COMMAND grep -q "38;2;63;119;179" "$<TARGET_FILE:term_color_test>")
 endif()

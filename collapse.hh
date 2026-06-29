@@ -22,13 +22,15 @@
 
 // Resolving term-color's depth-portable output to a terminal.
 //
-// rgb()/clear_color() emit THREE stacked SGR escapes per color (truecolor, then
-// 256-color, then 16-color) so a string is portable across terminals. A terminal
-// that does not understand the higher tiers ignores them, but one that
-// understands all three applies them in order and the last (16-color) wins -- so
-// for full color you must collapse each triple down to the single tier the
-// terminal actually supports. detect_depth() reads that from the environment;
-// collapse() does the reduction. (This is the counterpart to emitting the stack.)
+// rgb()/clear_color() emit THREE stacked SGR escapes per color (16-color, then
+// 256-color, then truecolor) so a string is portable across terminals. A terminal
+// that does not understand the higher tiers ignores them and applies the best one
+// it supports last, so on most terminals the stack already resolves to the right
+// tier on its own. collapse() is the explicit counterpart: it reduces each triple
+// to a single tier, both to strip color entirely (`none`) and to emit clean,
+// single-tier output for a known depth (or for terminals that render rather than
+// ignore the escapes they do not understand). detect_depth() reads the best depth
+// from the environment.
 
 #pragma once
 
@@ -70,13 +72,14 @@ inline depth detect_depth() noexcept {
 }
 
 // Reduce every run of three stacked term-color SGR escapes to just the tier `d`
-// (truecolor = 1st, ansi256 = 2nd, ansi16 = 3rd), or remove all color for `none`.
-// Runs whose length is not a multiple of three are left untouched (they are not
-// term-color triples). Non-SGR text passes through verbatim.
+// (ansi16 = 1st, ansi256 = 2nd, truecolor = 3rd -- matching ansi_color::ansi()'s
+// worst-tier-first stacking order), or remove all color for `none`. Runs whose
+// length is not a multiple of three are left untouched (they are not term-color
+// triples). Non-SGR text passes through verbatim.
 inline std::string collapse(std::string_view s, depth d) {
 	std::string out;
 	out.reserve(s.size());
-	const std::size_t pick = d == depth::truecolor ? 0 : d == depth::ansi256 ? 1 : 2;
+	const std::size_t pick = d == depth::truecolor ? 2 : d == depth::ansi256 ? 1 : 0;
 	std::size_t i = 0;
 	while (i < s.size()) {
 		if (s[i] == '\033' && i + 1 < s.size() && s[i + 1] == '[') {

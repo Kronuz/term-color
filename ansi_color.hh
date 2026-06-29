@@ -117,10 +117,16 @@ class ansi_color {
 
 public:
 	static constexpr auto ansi() {
+		// Stacked worst-tier-first: 16-color, then 256-color, then truecolor. A
+		// terminal applies each tier it understands in order, so it ends on the
+		// BEST tier it supports (which wins) and ignores the richer escapes it does
+		// not. A truecolor terminal therefore renders truecolor with no
+		// post-processing. (collapse() can still reduce this to a single tier, for
+		// cleaner output or for terminals that do not ignore unknown tiers.)
 		constexpr auto ansi = (
-			trueColor() +
+			standard16() +
 			standard256() +
-			standard16()
+			trueColor()
 		);
 		return ansi;
 	}

@@ -168,10 +168,13 @@ public:
 	}
 
 	auto ansi(bool bold = false) {
+		// Worst tier first, matching the compile-time ansi_color::ansi(): a
+		// terminal applies each tier it understands and ends on the best it
+		// supports (truecolor last on a capable terminal).
 		auto ansi = (
-			trueColor(bold) +
+			standard16(bold) +
 			standard256(bold) +
-			standard16(bold)
+			trueColor(bold)
 		);
 		return ansi;
 	}
