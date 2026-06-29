@@ -103,6 +103,22 @@ fractions for the primaries and the `s=0` gray path, and that the runtime `color
 class matches the compile-time `RED`. It prints `all term-color tests passed` and
 exits 0.
 
+## Examples
+
+[`examples/demo.cc`](examples/demo.cc) is a runnable tour. A top-level CMake build
+produces it next to the test:
+
+```sh
+cmake -B build && cmake --build build && ./build/term_color_demo
+```
+
+It prints one compile-time colored string as raw stacked bytes (16-color, then
+256-color, then truecolor), then the *same* string collapsed to each depth so you
+can watch one source resolve to whatever the terminal supports; a strip of named
+swatches; an HSV rainbow via the runtime `color` class; the bold (`brgb`) variant;
+and the gating layer (`apply()` with `--color`-style modes, a forced tier, the
+un-collapsed `stacked` form, and `NO_COLOR`).
+
 ## Provenance
 
 Extracted from [Xapiand](https://github.com/Kronuz/Xapiand), where it backed the

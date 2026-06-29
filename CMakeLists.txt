@@ -45,4 +45,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   # runtime build, these bytes would not appear as a contiguous literal.
   add_test(NAME term_color_binary_has_stack
     COMMAND grep -q "38;2;63;119;179" "$<TARGET_FILE:term_color_test>")
+
+  # A runnable tour of the library (not a test): build & run ./build/term_color_demo
+  add_executable(term_color_demo examples/demo.cc)
+  target_link_libraries(term_color_demo PRIVATE term_color)
 endif()
