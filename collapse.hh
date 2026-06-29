@@ -49,13 +49,20 @@ enum class depth {
 };
 
 // Best color depth for the current terminal, from the environment:
-//   NO_COLOR set            -> none
+//   NO_COLOR set & non-empty  -> none   (honoured only when respect_no_color)
 //   COLORTERM truecolor/24bit -> truecolor
-//   TERM *256color*         -> ansi256
-//   otherwise               -> ansi16
-inline depth detect_depth() noexcept {
-	if (std::getenv("NO_COLOR") != nullptr) {
-		return depth::none;
+//   TERM *256color*           -> ansi256
+//   otherwise                 -> ansi16
+// Per the NO_COLOR convention (https://no-color.org), the variable disables color
+// when present and NOT an empty string; its actual value does not matter. Pass
+// respect_no_color=false to detect the terminal's depth while a caller handles the
+// NO_COLOR gating itself (e.g. so an explicit "force color" flag can override it).
+inline depth detect_depth(bool respect_no_color = true) noexcept {
+	if (respect_no_color) {
+		const char* nc = std::getenv("NO_COLOR");
+		if (nc != nullptr && nc[0] != '\0') {
+			return depth::none;
+		}
 	}
 	if (const char* ct = std::getenv("COLORTERM")) {
 		std::string_view s(ct);
