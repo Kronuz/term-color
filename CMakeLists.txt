@@ -8,12 +8,12 @@ include(FetchContent)
 # `static_string::string(ESC "[") + explode<...>::value + ...`), so term-color
 # depends on the standalone static-string library. It is public: consumers see
 # `static_string.hh` on their include path, which is what `#include
-# "static_string.hh"` in ansi_color.hh resolves against. Pinned to the SHA
-# term-color was extracted against.
+# "static_string.hh"` in ansi_color.hh resolves against. Tracks the static-string
+# default branch (tip).
 FetchContent_Declare(
   static_string
   GIT_REPOSITORY https://github.com/Kronuz/static-string.git
-  GIT_TAG        43a2e67a31a10031eb9e0d8bef61c8b6c14cd958
+  GIT_TAG        main
 )
 FetchContent_MakeAvailable(static_string)
 
