@@ -1,5 +1,7 @@
 # term-color
 
+![constexpr](https://img.shields.io/badge/constexpr-compile--time-blue)
+
 A small, header-only **compile-time ANSI terminal color** library for C++20,
 extracted from [Xapiand](https://github.com/Kronuz/Xapiand).
 
