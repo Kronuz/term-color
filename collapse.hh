@@ -23,14 +23,22 @@
 // Resolving term-color's depth-portable output to a terminal.
 //
 // rgb()/clear_color() emit THREE stacked SGR escapes per color (16-color, then
-// 256-color, then truecolor) so a string is portable across terminals. A terminal
-// that does not understand the higher tiers ignores them and applies the best one
-// it supports last, so on most terminals the stack already resolves to the right
-// tier on its own. collapse() is the explicit counterpart: it reduces each triple
-// to a single tier, both to strip color entirely (`none`) and to emit clean,
-// single-tier output for a known depth (or for terminals that render rather than
-// ignore the escapes they do not understand). detect_depth() reads the best depth
-// from the environment.
+// 256-color, then truecolor) so a string is portable across terminals: a terminal
+// applies each tier it understands in sequence and the last one wins, so it ends
+// on the best tier it supports. On most terminals that stack already resolves on
+// its own, but it is best-effort (a terminal that mangles rather than ignores an
+// unknown tier renders it wrong, and the stack cannot honor NO_COLOR, a --color
+// mode, or a non-terminal sink). This file is the robust path:
+//
+//   collapse(s, depth)                  low level: reduce each stacked triple to
+//                                       one tier (or `none` to strip), no gating.
+//   detect_depth()                      the best tier for this terminal, from the
+//                                       environment (COLORTERM / TERM / NO_COLOR).
+//   apply(s, mode, target, is_terminal) high level: the whole "color? which tier?"
+//                                       policy (NO_COLOR + tty + mode), then
+//                                       collapse to target. What a logger sink calls.
+//
+// Most callers want apply(). Reach for collapse() when you already know the depth.
 
 #pragma once
 
@@ -83,6 +91,11 @@ inline depth detect_depth(bool respect_no_color = true) noexcept {
 // worst-tier-first stacking order), or remove all color for `none`. Runs whose
 // length is not a multiple of three are left untouched (they are not term-color
 // triples). Non-SGR text passes through verbatim.
+//
+// Consequence of the multiple-of-three rule: a lone SGR next to a color (e.g. a
+// bare `ESC[1m` bold before a color) makes a run of four and is NOT reduced, so
+// the whole run passes through unresolved. Put bold *inside* the color instead --
+// `brgb(r,g,b)` / `color::ansi(true)` fold it into each tier, keeping a clean triple.
 inline std::string collapse(std::string_view s, depth d) {
 	std::string out;
 	out.reserve(s.size());

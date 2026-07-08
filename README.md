@@ -9,11 +9,17 @@ extracted from [Xapiand](https://github.com/Kronuz/Xapiand).
 
 Named colors like `RED` or `STEEL_BLUE` that expand, at compile time, into the
 ANSI escape sequence that paints text in that color. Each color emits three
-escapes back to back, richest first: 24-bit truecolor, then the 256-color
-palette, then the 16-color palette. A capable terminal applies the truecolor one
-and ignores the rest; a poorer terminal that doesn't understand truecolor falls
-through to the 256- or 16-color approximation. So one constant degrades
-gracefully across terminals without a runtime capability check.
+escapes back to back, worst first: the 16-color palette, then the 256-color
+palette, then 24-bit truecolor. A terminal applies each escape it understands in
+turn and ends on the last (best) one it supports, so the richest tier it can
+render wins and one constant stays portable across terminals.
+
+That stacked form is portable but best-effort (a 256-only terminal that mangles
+rather than ignores an unknown truecolor escape is the awkward case). For a
+guaranteed single tier, and to honor a `--color` mode, `NO_COLOR`, and
+non-terminal sinks like a log file, resolve the stacked string at runtime with
+`collapse()` / `apply()` from `collapse.hh`. See
+[Resolving to a terminal](#resolving-to-a-terminal).
 
 The escapes are built as [`static_string`](https://github.com/Kronuz/static-string)s,
 so `RED + "error" + CLEAR_COLOR` is a single compile-time constant, not a runtime
@@ -25,6 +31,7 @@ known until runtime.
   ansi_color.hh    the ansi_color<r,g,b,bold> template + the rgb()/brgb() macros
   colors.h         151 named colors (ALICE_BLUE … YELLOW_GREEN) + NO_COLOR / CLEAR_COLOR
   color_tools.hh   hsv2rgb() and the runtime `color` class
+  collapse.hh      collapse()/apply() to resolve the stacked escapes to one tier
 ```
 
 ## Install
@@ -91,7 +98,54 @@ color c(r * 255, g * 255, b * 255);
 std::string ansi = c.ansi();                 // same three-tier escape, built at runtime
 ```
 
-## Build & test
+## Resolving to a terminal
+
+A color is emitted as three stacked escapes (`ansi_color::ansi()` /
+`color::ansi()` / `rgb()` build 16-color, then 256-color, then truecolor). Two
+functions in `collapse.hh` reduce that stack to what a given sink should actually
+receive. This is the piece you reach for in a logger, a CLI, or anywhere output
+may go to a pipe or a `--color=never` run.
+
+`apply()` is the one most callers want. It owns the whole "should I color, and at
+what tier?" policy in one call:
+
+```cpp
+#include "collapse.hh"   // term_color::apply / collapse / detect_depth
+using namespace term_color;
+
+// mode:   automatic (tty-gated, honors NO_COLOR) | always | never
+// target: automatic (detect the tier) | ansi16 | ansi256 | truecolor | stacked
+std::string out = apply(line, mode::automatic, target::automatic, ::isatty(1));
+std::fwrite(out.data(), 1, out.size(), stdout);
+```
+
+- `mode` mirrors a conventional `--color` flag. `automatic` colors only when the
+  sink is a terminal and `NO_COLOR` is unset/empty; `always` forces it; `never`
+  strips all color.
+- `target` is the tier to collapse to. `automatic` detects it from `COLORTERM` /
+  `TERM`; `stacked` is the escape hatch that emits all three tiers and leaves the
+  terminal to pick (the portable-but-best-effort form).
+
+`collapse()` is the lower-level primitive `apply()` is built on: reduce every
+stacked triple to one `depth`, with no gating.
+
+```cpp
+std::string just_256   = collapse(line, depth::ansi256);   // one tier, always
+std::string plain_text = collapse(line, depth::none);      // strip all color
+depth here = detect_depth();                                // from COLORTERM / TERM
+```
+
+Use `collapse()` when you already know the depth you want (or want to force one);
+use `apply()` when you want the tty / `NO_COLOR` / mode gating handled for you.
+
+**One gotcha.** `collapse()` recognizes a color by its shape: a run of SGR escapes
+whose length is a multiple of three is treated as stacked triples and reduced; any
+other run is passed through untouched. So a lone `ESC[1m` (bold) placed *next to* a
+color makes a run of four and defeats the collapse. Don't emit bold separately —
+use `brgb(r, g, b)` (or `color::ansi(true)`), which folds bold into each of the
+three tiers, so the run stays a clean triple.
+
+
 
 ```sh
 cmake -B build && cmake --build build && ctest --test-dir build

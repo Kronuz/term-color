@@ -53,11 +53,14 @@ is `term_color_test`; the registered CTest name is `term_color`.
 
 ## Load-bearing invariants
 
-- **The three-tier escape and its order.** Every color emits truecolor, then
-  256-color, then 16-color, in that order. That order is what gives the graceful
-  downgrade: the richest escape a terminal understands wins, poorer terminals
-  fall through. Don't reorder the tiers or drop one — a consumer relies on a
-  single constant being correct across terminal capabilities.
+- **The three-tier escape and its order.** Every color emits 16-color, then
+  256-color, then truecolor, in that order (worst first). That order is what gives
+  the graceful downgrade: a terminal applies each tier it understands in sequence
+  and the last one wins, so it ends on the best tier it supports (truecolor last on
+  a capable terminal). Reverse the order and a capable terminal would end on the
+  crudest tier. Don't reorder the tiers or drop one; a consumer relies on a single
+  constant being correct across terminal capabilities, and on `collapse()` finding
+  clean triples (a run of three) to reduce.
 - **The downgrade math is exact and tested.** The 256-color cube index, the
   grayscale ramp, and the 16-color thresholding produce specific indices (e.g.
   `RED` -> truecolor `255;0;0`, 256-color `196`, 16-color `9`). `test/test.cc`
