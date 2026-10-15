@@ -1,5 +1,7 @@
 # term-color
 
+[![CI](https://github.com/Kronuz/term-color/actions/workflows/ci.yml/badge.svg)](https://github.com/Kronuz/term-color/actions/workflows/ci.yml)
+
 ![constexpr](https://img.shields.io/badge/constexpr-compile--time-blue)
 
 A small, header-only **compile-time ANSI terminal color** library for C++20,
