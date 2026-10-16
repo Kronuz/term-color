@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1013" height="649" viewBox="0 0 1013 649">
+<rect width="1013" height="649" rx="10" fill="#1f2329"/>
+<circle cx="20" cy="18" r="6" fill="#ff5f57"/><circle cx="40" cy="18" r="6" fill="#febc2e"/><circle cx="60" cy="18" r="6" fill="#28c840"/>
+<text x="506.5" y="22" fill="#8a919c" font-family="Menlo, Consolas, monospace" font-size="12" text-anchor="middle">term_color_demo</text>
+<g font-family="Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="14" fill="#d8dee9" xml:space="preserve">
+<text x="18.0" y="56" >term-color demo  (this terminal detected as: truecolor)</text>
+<text x="18.0" y="94" font-weight="bold">── one string, built at compile time, carries every tier ──</text>
+<text x="18.0" y="113" >  raw bytes : \e[0;91m\e[0;38;5;196m\e[0;38;2;255;0;0mthe quick brown fox\e[0m\e[0m\e[0m</text>
+<text x="18.0" y="151" font-weight="bold">── collapse() resolves it per terminal ──</text>
+<text x="18.0" y="170" >  truecolor : </text>
+<text x="136.0" y="170" fill="#ff0000">the quick brown fox</text>
+<text x="296.2" y="170" >   (38;2;r;g;b)</text>
+<text x="18.0" y="189" >  256-color : </text>
+<text x="136.0" y="189" fill="#ff0000">the quick brown fox</text>
+<text x="296.2" y="189" >   (38;5;n)</text>
+<text x="18.0" y="208" >  16-color  : </text>
+<text x="136.0" y="208" fill="#ff8a8f">the quick brown fox</text>
+<text x="296.2" y="208" >   (30-37/90-97)</text>
+<text x="18.0" y="227" >  none      : the quick brown fox   (stripped)</text>
+<text x="18.0" y="246" >  (each line is the SAME source string, reduced to one tier)</text>
+<text x="18.0" y="284" font-weight="bold">── 153 named colors (collapsed to this terminal) ──</text>
+<text x="18.0" y="303" >  </text>
+<text x="34.9" y="303" fill="#ff0000">██ </text>
+<text x="60.1" y="303" fill="#ffa500">██ </text>
+<text x="85.4" y="303" fill="#ffd700">██ </text>
+<text x="110.7" y="303" fill="#008000">██ </text>
+<text x="136.0" y="303" fill="#008080">██ </text>
+<text x="161.3" y="303" fill="#1e90ff">██ </text>
+<text x="186.6" y="303" fill="#8a2be2">██ </text>
+<text x="211.9" y="303" fill="#ff69b4">██ </text>
+<text x="237.2" y="303" fill="#808080">██ </text>
+<text x="262.5" y="303" fill="#ffffff">██ </text>
+<text x="18.0" y="322" >  </text>
+<text x="34.9" y="322" fill="#ff0000">RED </text>
+<text x="68.6" y="322" fill="#ffa500">ORANGE </text>
+<text x="127.6" y="322" fill="#ffd700">GOLD </text>
+<text x="169.7" y="322" fill="#008000">GREEN </text>
+<text x="220.3" y="322" fill="#008080">TEAL </text>
+<text x="262.5" y="322" fill="#1e90ff">DODGER_BLUE </text>
+<text x="363.6" y="322" fill="#8a2be2">BLUE_VIOLET </text>
+<text x="464.8" y="322" fill="#ff69b4">HOT_PINK </text>
+<text x="540.7" y="322" fill="#808080">GRAY </text>
+<text x="582.8" y="322" fill="#ffffff">WHITE </text>
+<text x="18.0" y="360" font-weight="bold">── hsv2rgb sweep (runtime color, collapsed to this terminal) ──</text>
+<text x="18.0" y="379" >  </text>
+<text x="34.9" y="379" fill="#ff0000">█</text>
+<text x="43.3" y="379" fill="#ff1900">█</text>
+<text x="51.7" y="379" fill="#ff3200">█</text>
+<text x="60.1" y="379" fill="#ff4c00">█</text>
+<text x="68.6" y="379" fill="#ff6600">█</text>
+<text x="77.0" y="379" fill="#ff7f00">█</text>
+<text x="85.4" y="379" fill="#ff9900">█</text>
+<text x="93.9" y="379" fill="#ffb200">█</text>
+<text x="102.3" y="379" fill="#ffcc00">█</text>
+<text x="110.7" y="379" fill="#ffe500">█</text>
+<text x="119.2" y="379" fill="#ffff00">█</text>
+<text x="127.6" y="379" fill="#e5ff00">█</text>
+<text x="136.0" y="379" fill="#ccff00">█</text>
+<text x="144.4" y="379" fill="#b2ff00">█</text>
+<text x="152.9" y="379" fill="#99ff00">█</text>
+<text x="161.3" y="379" fill="#7fff00">█</text>
+<text x="169.7" y="379" fill="#65ff00">█</text>
+<text x="178.2" y="379" fill="#4cff00">█</text>
+<text x="186.6" y="379" fill="#32ff00">█</text>
+<text x="195.0" y="379" fill="#19ff00">█</text>
+<text x="203.5" y="379" fill="#00ff00">█</text>
+<text x="211.9" y="379" fill="#00ff19">█</text>
+<text x="220.3" y="379" fill="#00ff33">█</text>
+<text x="228.8" y="379" fill="#00ff4c">█</text>
+<text x="237.2" y="379" fill="#00ff65">█</text>
+<text x="245.6" y="379" fill="#00ff7f">█</text>
+<text x="254.0" y="379" fill="#00ff99">█</text>
+<text x="262.5" y="379" fill="#00ffb2">█</text>
+<text x="270.9" y="379" fill="#00ffcb">█</text>
+<text x="279.3" y="379" fill="#00ffe5">█</text>
+<text x="287.8" y="379" fill="#00ffff">█</text>
+<text x="296.2" y="379" fill="#00e5ff">█</text>
+<text x="304.6" y="379" fill="#00cbff">█</text>
+<text x="313.1" y="379" fill="#00b2ff">█</text>
+<text x="321.5" y="379" fill="#0099ff">█</text>
+<text x="329.9" y="379" fill="#007fff">█</text>
+<text x="338.3" y="379" fill="#0065ff">█</text>
+<text x="346.8" y="379" fill="#004cff">█</text>
+<text x="355.2" y="379" fill="#0033ff">█</text>
+<text x="363.6" y="379" fill="#0019ff">█</text>
+<text x="372.1" y="379" fill="#0000ff">█</text>
+<text x="380.5" y="379" fill="#1900ff">█</text>
+<text x="388.9" y="379" fill="#3300ff">█</text>
+<text x="397.3" y="379" fill="#4c00ff">█</text>
+<text x="405.8" y="379" fill="#6600ff">█</text>
+<text x="414.2" y="379" fill="#7f00ff">█</text>
+<text x="422.6" y="379" fill="#9800ff">█</text>
+<text x="431.1" y="379" fill="#b200ff">█</text>
+<text x="439.5" y="379" fill="#cb00ff">█</text>
+<text x="447.9" y="379" fill="#e500ff">█</text>
+<text x="456.4" y="379" fill="#ff00ff">█</text>
+<text x="464.8" y="379" fill="#ff00e5">█</text>
+<text x="473.2" y="379" fill="#ff00cb">█</text>
+<text x="481.6" y="379" fill="#ff00b2">█</text>
+<text x="490.1" y="379" fill="#ff0098">█</text>
+<text x="498.5" y="379" fill="#ff007f">█</text>
+<text x="506.9" y="379" fill="#ff0066">█</text>
+<text x="515.4" y="379" fill="#ff004c">█</text>
+<text x="523.8" y="379" fill="#ff0033">█</text>
+<text x="532.2" y="379" fill="#ff0019">█</text>
+<text x="18.0" y="417" font-weight="bold">── bold (brgb) and the runtime color class ──</text>
+<text x="18.0" y="436" >  </text>
+<text x="34.9" y="436" fill="#ffd700" font-weight="bold">bold gold (brgb)</text>
+<text x="18.0" y="455" >  color(0,128,128) -&gt; r=0 g=128 b=128, ansi() 38 bytes stacked</text>
+<text x="18.0" y="493" font-weight="bold">── apply(): gate by mode / NO_COLOR, then collapse ──</text>
+<text x="18.0" y="512" >  mode=always  : </text>
+<text x="161.3" y="512" fill="#1e90ff">status: ok</text>
+<text x="18.0" y="531" >  mode=never   : status: ok   (stripped)</text>
+<text x="18.0" y="550" >  target=16    : </text>
+<text x="161.3" y="550" fill="#87ffff">status: ok</text>
+<text x="18.0" y="569" >  target=stacked (all tiers, terminal resolves): \e[0;96m\e[0;38;5;75m\e[0;38;2;30;144;255mstatus: ok\e[0m\e[0m\e[0m</text>
+<text x="18.0" y="588" >  NO_COLOR is unset right now</text>
+<text x="18.0" y="626" >done.</text>
+</g></svg>

@@ -14,7 +14,9 @@ color_tools.hh               hsv2rgb() and the runtime `color` class (std::forma
 test/test.cc                 Runnable smoke test: named-color escapes (static_assert), bold/concat, hsv2rgb, the color class.
 CMakeLists.txt               INTERFACE library `term_color` (+ alias term_color::term_color); FetchContent static-string; CTest test `term_color`.
 LICENSE                      MIT, Copyright (c) 2015-2019 Dubalu LLC.
-README.md                    What it is, install, usage.
+README.md                    What it is, install, quick start.
+docs/API.md                  Named colors, the runtime class, apply()/collapse().
+docs/term-color.svg          The demo's output, rendered for the README.
 ARCHITECTURE.md              The three-tier escape, the downgrade math, why static_string.
 ```
 
