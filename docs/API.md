@@ -32,6 +32,19 @@ color c(r * 255, g * 255, b * 255);
 std::string ansi = c.ansi();                 // same three-tier escape, built at runtime
 ```
 
+`name_color(name)` gives a name a stable color, the same on every machine: its 64-bit
+FNV-1a hash spread around the hue wheel by the golden ratio. Xapiand colors its nodes this
+way. `gradient_banner(art, top, bottom, info)` renders a startup wordmark whose lines step
+from `top` to `bottom`, with `info` lines right-aligned under it.
+
+```cpp
+std::string node = name_color("node1").ansi() + "node1";
+const std::string_view art[] = {" _  _ ", "| \\| |", "|_|\\_|"};
+const uint8_t top[3] = {144, 238, 144}, bottom[3] = {0, 96, 0};
+const std::string info[] = {"v1.0.0"};
+std::string banner = gradient_banner(art, top, bottom, info);
+```
+
 ## Resolving to a terminal
 
 A color is emitted as three stacked escapes (`ansi_color::ansi()` /

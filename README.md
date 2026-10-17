@@ -23,7 +23,7 @@ pipes. For colored logs and command-line tools.
 - **Correct for pipes and logs.** `apply()` resolves colors to one tier, or strips
   them, by `--color` mode, `NO_COLOR`, and whether the sink is a terminal.
 - **Runtime colors too.** `hsv2rgb` and a `color` class for values known only at
-  runtime.
+  runtime, a stable color per name (`name_color`), and gradient startup banners.
 
 ## 📦 Installation
 

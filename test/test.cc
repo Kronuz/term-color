@@ -280,6 +280,26 @@ static void test_apply() {
 }
 
 
+// name_color: stable per name and pinned to Xapiand's node colors; gradient_banner steps
+// its colors from top to bottom and right-aligns its info lines.
+static void test_name_color_and_banner() {
+	struct pinned { const char* name; int r, g, b; };
+	for (const pinned& p : {pinned{"node1", 76, 191, 76}, pinned{"Xapiand", 191, 137, 76}, pinned{"benchnode", 91, 191, 76}, pinned{"", 76, 168, 191}}) {
+		auto c = name_color(p.name);
+		assert(c.red() == p.r && c.green() == p.g && c.blue() == p.b);
+	}
+	assert(name_color("node1").ansi() == name_color("node1").ansi());
+	const std::string_view art[] = {"ab", "cd", "ef"};
+	const uint8_t top[3] = {255, 0, 0}, bottom[3] = {0, 0, 255};
+	const std::string info[] = {"v1"};
+	const std::string b = gradient_banner(art, top, bottom, info);
+	assert(b.find(color(255, 0, 0).ansi() + "ab\n") != std::string::npos);
+	assert(b.find(color(128, 0, 127).ansi() + "cd\n") != std::string::npos);
+	assert(b.find(color(0, 0, 255).ansi() + "ef\n") != std::string::npos);
+	assert(b.find(color(0, 0, 255).ansi() + "v1\n") != std::string::npos);  // right-aligned to width 2
+	std::printf("name_color OK: pinned to Xapiand's node colors; gradient_banner OK\n");
+}
+
 int main() {
 	test_named_colors();
 	test_16color_downgrade_tier();
@@ -288,6 +308,7 @@ int main() {
 	test_color_class();
 	test_collapse();
 	test_apply();
+	test_name_color_and_banner();
 	std::printf("all term-color tests passed (stacked %zu bytes, compile-time)\n", kStacked.size());
 	return 0;
 }

@@ -25,6 +25,9 @@
 #include <cmath>             // for std::fmod
 #include <cstdint>           // for uint8_t
 #include <format>            // for std::format
+#include <span>              // for std::span
+#include <string>            // for std::string
+#include <string_view>       // for std::string_view
 
 #include "ansi_color.hh"     // for ESC
 
@@ -179,3 +182,40 @@ public:
 		return ansi;
 	}
 };
+
+// A stable color for a name (a node, a peer, a voter), the same on every machine: its
+// 64-bit FNV-1a hash spread around the hue wheel by the golden ratio, at saturation 0.6
+// and value 0.75. Xapiand colors its nodes this way.
+inline color name_color(std::string_view name) {
+	std::uint64_t h = 14695981039346656037ULL;
+	for (unsigned char c : name) { h = (h ^ c) * 0x100000001b3ULL; }
+	double hue = static_cast<double>(h);
+	hue = hue + (hue / 0.618033988749895);
+	double red, green, blue;
+	hsv2rgb(hue, 0.6, 0.75, red, green, blue);
+	return color(static_cast<uint8_t>(red * 255), static_cast<uint8_t>(green * 255), static_cast<uint8_t>(blue * 255));
+}
+
+// A startup wordmark: each line of `art` in a color stepping from `top` to `bottom`, then
+// each of `info` right-aligned under it in `bottom`'s color. Colors are stacked escapes,
+// which a logger collapses to what the terminal supports.
+inline std::string gradient_banner(std::span<const std::string_view> art, const uint8_t (&top)[3], const uint8_t (&bottom)[3],
+	std::span<const std::string> info = {}) {
+	std::size_t width = 0;
+	for (auto line : art) { width = line.size() > width ? line.size() : width; }
+	std::string out = "\n";
+	const std::size_t n = art.size();
+	for (std::size_t i = 0; i < n; ++i) {
+		uint8_t c[3];
+		for (int k = 0; k < 3; ++k) {
+			c[k] = static_cast<uint8_t>(n > 1 ? top[k] + (int(bottom[k]) - int(top[k])) * int(i) / int(n - 1) : top[k]);
+		}
+		out += color(c[0], c[1], c[2]).ansi();
+		out += art[i];
+		out += '\n';
+	}
+	const std::string dim = color(bottom[0], bottom[1], bottom[2]).ansi();
+	for (const auto& line : info) { out += dim + std::format("{:>{}}\n", line, width); }
+	return out + ESC "[0m";
+}
+
