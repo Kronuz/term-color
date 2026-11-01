@@ -37,12 +37,17 @@
 //   apply(s, mode, target, is_terminal) high level: the whole "color? which tier?"
 //                                       policy (NO_COLOR + tty + mode), then
 //                                       collapse to target. What a logger sink calls.
+//   resolve(mode, target, is_terminal)  the same policy, decided once: returns a
+//                                       `policy` whose apply(s) collapses a line without
+//                                       reading the environment again.
 //
-// Most callers want apply(). Reach for collapse() when you already know the depth.
+// Most callers want apply(). Reach for collapse() when you already know the depth, and for
+// resolve() when one sink writes many lines.
 
 #pragma once
 
 #include <cstddef>          // for std::size_t
+#include <cstdint>          // for std::uint64_t
 #include <cstdlib>          // for std::getenv
 #include <cstring>          // for std::memchr, std::memcpy
 #include <string>           // for std::string
@@ -87,6 +92,77 @@ inline depth detect_depth(bool respect_no_color = true) noexcept {
 	return depth::ansi16;
 }
 
+namespace detail {
+
+// True when some byte of `w` equals the byte repeated in `pattern`.
+inline bool has_byte(std::uint64_t w, std::uint64_t pattern) noexcept {
+	const std::uint64_t t = w ^ pattern;
+	return ((t - 0x0101010101010101ull) & ~t & 0x8080808080808080ull) != 0;
+}
+
+// Copies the plain text at `p` up to the next ESC (or `end`) to `w`, advancing `w`, and returns
+// where it stopped. It takes eight bytes at a time while none is ESC, and hands a stretch of
+// eight words or more to memchr; the short stretches between escapes stay cheap.
+inline const char* copy_plain(const char* p, const char* end, char*& w) noexcept {
+	int words = 0;
+	while (end - p >= 8) {
+		std::uint64_t x;
+		std::memcpy(&x, p, 8);
+		if (has_byte(x, 0x1b1b1b1b1b1b1b1bull)) {
+			break;
+		}
+		std::memcpy(w, p, 8);
+		p += 8;
+		w += 8;
+		if (++words == 8) {
+			const char* esc = static_cast<const char*>(std::memchr(p, '\033', static_cast<std::size_t>(end - p)));
+			const char* stop = esc != nullptr ? esc : end;
+			std::memcpy(w, p, static_cast<std::size_t>(stop - p));
+			w += stop - p;
+			return stop;
+		}
+	}
+	while (p < end && *p != '\033') {
+		*w++ = *p++;
+	}
+	return p;
+}
+
+// One past the 'm' that ends the escape whose parameters start at `k`, or `end` when there is none.
+inline const char* escape_end(const char* k, const char* end) noexcept {
+	while (end - k >= 8) {
+		std::uint64_t x;
+		std::memcpy(&x, k, 8);
+		if (has_byte(x, 0x6d6d6d6d6d6d6d6dull)) {
+			break;
+		}
+		k += 8;
+	}
+	while (k < end && *k != 'm') {
+		++k;
+	}
+	return k < end ? k + 1 : end;
+}
+
+// Copies n bytes (an escape, up to a few dozen) without a library call.
+inline void copy_small(char* to, const char* from, std::size_t n) noexcept {
+	if (n < 8) {
+		for (std::size_t i = 0; i < n; ++i) {
+			to[i] = from[i];
+		}
+		return;
+	}
+	std::size_t i = 0;
+	for (; i + 8 <= n; i += 8) {
+		std::memcpy(to + i, from + i, 8);
+	}
+	if (i < n) {
+		std::memcpy(to + n - 8, from + n - 8, 8);
+	}
+}
+
+}  // namespace detail
+
 // Reduce every run of three stacked term-color SGR escapes to just the tier `d`
 // (ansi16 = 1st, ansi256 = 2nd, truecolor = 3rd -- matching ansi_color::ansi()'s
 // worst-tier-first stacking order), or remove all color for `none`. Runs whose
@@ -98,10 +174,9 @@ inline depth detect_depth(bool respect_no_color = true) noexcept {
 // the whole run passes through unresolved. Put bold *inside* the color instead --
 // `brgb(r,g,b)` / `color::ansi(true)` fold it into each tier, keeping a clean triple.
 inline std::string collapse(std::string_view s, depth d) {
-	// The result never outgrows the input, so one allocation covers it. Plain text between
-	// escapes is copied in bulk (found with memchr); each run of SGR escapes is walked once,
-	// keeping the escape of the chosen tier as it goes and undoing that when the run turns out
-	// not to be a multiple of three.
+	// The result never outgrows the input, so one allocation covers it. Each run of SGR escapes
+	// is walked once, keeping the escape of the chosen tier as it goes and undoing that when the
+	// run turns out not to be a multiple of three.
 	std::string out(s.size(), '\0');
 	char* w = out.data();
 	const std::size_t pick = d == depth::truecolor ? 2 : d == depth::ansi256 ? 1 : 0;
@@ -109,15 +184,10 @@ inline std::string collapse(std::string_view s, depth d) {
 	const char* p = s.data();
 	const char* const end = p + s.size();
 	while (p < end) {
-		const char* esc = static_cast<const char*>(std::memchr(p, '\033', static_cast<std::size_t>(end - p)));
-		if (esc == nullptr) {
-			std::memcpy(w, p, static_cast<std::size_t>(end - p));
-			w += end - p;
+		p = detail::copy_plain(p, end, w);
+		if (p == end) {
 			break;
 		}
-		std::memcpy(w, p, static_cast<std::size_t>(esc - p));
-		w += esc - p;
-		p = esc;
 		if (p + 1 == end || p[1] != '[') {
 			*w++ = '\033';  // a lone ESC is plain text
 			++p;
@@ -128,15 +198,9 @@ inline std::string collapse(std::string_view s, depth d) {
 		std::size_t count = 0;
 		const char* j = p;
 		while (j + 1 < end && j[0] == '\033' && j[1] == '[') {
-			const char* k = j + 2;
-			while (k < end && *k != 'm') {
-				++k;
-			}
-			if (k < end) {
-				++k;  // include the terminating 'm'
-			}
+			const char* k = detail::escape_end(j + 2, end);
 			if (!strip && count % 3 == pick) {
-				std::memcpy(w, j, static_cast<std::size_t>(k - j));
+				detail::copy_small(w, j, static_cast<std::size_t>(k - j));
 				w += k - j;
 			}
 			++count;
@@ -198,22 +262,51 @@ inline bool colorize(mode m, bool is_terminal) noexcept {
 	}
 }
 
+// What apply() decides before it touches the text: whether to color, and at which tier.
+// Deciding reads NO_COLOR, COLORTERM and TERM from the environment, so a sink that writes
+// many lines resolves once and applies the policy to each (`policy::apply`).
+struct policy {
+	bool color = true;           // false: strip all color
+	bool stacked = false;        // true: pass the stack through untouched
+	depth tier = depth::ansi16;  // the tier to collapse to when coloring and not stacked
+
+	// Terminal-ready bytes for `s`: all color stripped when gated off, the stack passed through
+	// untouched for `stacked`, otherwise collapsed to `tier`.
+	std::string apply(std::string_view s) const {
+		if (!color) {
+			return collapse(s, depth::none);
+		}
+		if (stacked) {
+			return std::string(s);
+		}
+		return collapse(s, tier);
+	}
+};
+
+// Resolve (mode, target, is_terminal) into a policy, reading the environment now.
+inline policy resolve(mode m, target t, bool is_terminal) {
+	policy p;
+	if (!colorize(m, is_terminal)) {
+		p.color = false;
+		return p;
+	}
+	if (t == target::stacked) {
+		p.stacked = true;
+		return p;
+	}
+	p.tier = t == target::ansi16 ? depth::ansi16
+		: t == target::ansi256 ? depth::ansi256
+		: t == target::truecolor ? depth::truecolor
+		: detect_depth(false);   // target::automatic
+	return p;
+}
+
 // Produce terminal-ready bytes for `s` under (mode, target, is_terminal): strip all
 // color when gated off, pass the stack through untouched for `stacked`, otherwise
 // collapse to the requested tier (or the terminal's detected tier for `automatic`).
 // NO_COLOR is handled by the gate, so the depth detection here ignores it.
 inline std::string apply(std::string_view s, mode m, target t, bool is_terminal) {
-	if (!colorize(m, is_terminal)) {
-		return collapse(s, depth::none);
-	}
-	if (t == target::stacked) {
-		return std::string(s);
-	}
-	depth d = t == target::ansi16 ? depth::ansi16
-		: t == target::ansi256 ? depth::ansi256
-		: t == target::truecolor ? depth::truecolor
-		: detect_depth(false);   // target::automatic
-	return collapse(s, d);
+	return resolve(m, t, is_terminal).apply(s);
 }
 
 }  // namespace term_color

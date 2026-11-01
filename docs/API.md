@@ -85,6 +85,21 @@ depth here = detect_depth();                                // from COLORTERM / 
 Use `collapse()` when you already know the depth you want (or want to force one);
 use `apply()` when you want the tty / `NO_COLOR` / mode gating handled for you.
 
+`apply()` reads `NO_COLOR`, `COLORTERM` and `TERM` from the environment on every
+call. A sink that writes many lines resolves the policy once and applies it to each
+line; the result is the same bytes:
+
+```cpp
+policy p = resolve(mode::automatic, target::automatic, ::isatty(1));   // reads the environment
+for (auto& line : lines) {
+	std::string out = p.apply(line);   // no environment lookup
+}
+```
+
+`policy` holds three fields: `color` (false strips all color), `stacked` (true passes
+the stack through) and `tier` (the `depth` to collapse to). The environment is read
+when `resolve()` runs, so a change to it applies to the next `resolve()`.
+
 **One gotcha.** `collapse()` recognizes a color by its shape: a run of SGR escapes
 whose length is a multiple of three is treated as stacked triples and reduced; any
 other run is passed through untouched. So a lone `ESC[1m` (bold) placed *next to* a

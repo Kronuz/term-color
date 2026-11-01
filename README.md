@@ -74,6 +74,30 @@ string collapsed to each depth.
   manage the screen.
 - ❌ Windows consoles without virtual-terminal sequences enabled.
 
+## ⚡ Performance
+
+Resolving a stacked color line is one pass over it. On an Apple M4 Pro (Apple clang 17,
+`-O3`), from `bench/bench.cc`:
+
+| input | `collapse` to `none` | `collapse` to `truecolor` |
+| --- | ---: | ---: |
+| plain line, 110 B | 36 ns | 36 ns |
+| log line, 478 B | 144 ns | 173 ns |
+| colorful line, 1366 B | 470 ns | 664 ns |
+| 64 KB of plain text | 2.1 µs | 2.1 µs |
+
+`color::ansi()` for one RGB value takes 38 ns. `apply()` reads `NO_COLOR`, `COLORTERM` and
+`TERM` on every call, 80 to 130 ns each here; a sink that writes many lines calls `resolve()`
+once and `policy::apply()` per line (174 ns for the log line above, against 721 ns for
+`apply()` on every line in the same loop).
+
+```sh
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DTERM_COLOR_BUILD_BENCH=ON && cmake --build build
+./build/term_color_bench
+```
+
+[CHANGELOG.md](CHANGELOG.md) lists the changes with their measurements.
+
 ## 📚 Documentation
 
 - [docs/API.md](docs/API.md): named colors, `rgb`/`brgb`, the runtime `color`

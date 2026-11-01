@@ -6,13 +6,15 @@ test/diff_test.cc against them (with the frozen originals) and require that the 
 crashes. A mutant that survives means the differential test would not catch that bug.
 
 usage: tools/mutants.py TREE_DIR [CXX] [only-name ...]
-       env: MUT_DIR (scratch dir), STATIC_STRING (directory holding static_string.hh)
+       env: MUT_DIR (scratch dir), STATIC_STRING (directory holding static_string.hh),
+            QUIET_GATE=1 (start each mutant only while `quiet check` reports no live hold)
 """
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 tree = os.path.abspath(sys.argv[1])
 cxx = sys.argv[2] if len(sys.argv) > 2 else "c++"
@@ -34,7 +36,7 @@ MUTANTS = {
     # the multiple-of-three test is off by one
     "triple_test": ("collapse.hh", "if (!strip && count % 3 != 0) {", "if (!strip && count % 3 != 1) {"),
     # an escape loses its terminating 'm'
-    "no_terminator": ("collapse.hh", "\t\t\tif (k < end) {\n\t\t\t\t++k;  // include the terminating 'm'\n\t\t\t}\n", ""),
+    "no_terminator": ("collapse.hh", "\treturn k < end ? k + 1 : end;", "\treturn k < end ? k : end;"),
     # a run needs two bytes after the last escape
     "run_end": ("collapse.hh", "while (j + 1 < end && j[0] == '\\033' && j[1] == '[') {", "while (j + 2 < end && j[0] == '\\033' && j[1] == '[') {"),
     # every escape of a triple is kept
@@ -43,8 +45,18 @@ MUTANTS = {
     "restore_short": ("collapse.hh", "std::memcpy(w, p, static_cast<std::size_t>(j - p));", "std::memcpy(w, p, static_cast<std::size_t>(j - p - 1));"),
     # the result keeps its zero padding
     "no_resize": ("collapse.hh", "out.resize(static_cast<std::size_t>(w - out.data()));", ""),
-    # plain text before an ESC loses its last byte
-    "text_short": ("collapse.hh", "std::memcpy(w, p, static_cast<std::size_t>(esc - p));\n\t\tw += esc - p;", "std::memcpy(w, p, static_cast<std::size_t>(esc - p));\n\t\tw += esc - p - (esc > p ? 1 : 0);"),
+    # the word scan for ESC looks for another byte
+    "text_word_scan": ("collapse.hh", "0x1b1b1b1b1b1b1b1bull", "0x1c1c1c1c1c1c1c1cull"),
+    # the long-stretch copy loses its last byte
+    "text_long_short": ("collapse.hh", "std::memcpy(w, p, static_cast<std::size_t>(stop - p));\n\t\t\tw += stop - p;", "std::memcpy(w, p, static_cast<std::size_t>(stop - p - 1));\n\t\t\tw += stop - p - 1;"),
+    # the word scan for the end of an escape looks for another byte
+    "escape_word_scan": ("collapse.hh", "0x6d6d6d6d6d6d6d6dull", "0x6e6e6e6e6e6e6e6eull"),
+    # a short escape copy loses its last byte
+    "copy_small_short": ("collapse.hh", "\t\tfor (std::size_t i = 0; i < n; ++i) {\n\t\t\tto[i] = from[i];", "\t\tfor (std::size_t i = 0; i + 1 < n; ++i) {\n\t\t\tto[i] = from[i];"),
+    # the overlapping tail of a longer escape copy is misplaced
+    "copy_small_tail": ("collapse.hh", "std::memcpy(to + n - 8, from + n - 8, 8);", "std::memcpy(to + n - 7, from + n - 7, 8);"),
+    # a resolved policy strips where it should color
+    "policy_color": ("collapse.hh", "\t\tif (!color) {\n\t\t\treturn collapse(s, depth::none);", "\t\tif (color) {\n\t\t\treturn collapse(s, depth::none);"),
     # hundreds are not written for 100
     "put_hundred": ("color_tools.hh", "if (v >= 100) {", "if (v > 100) {"),
     # tens are not written for 10
@@ -68,10 +80,21 @@ if len(MUTANTS) < 15:
 
 work = os.environ.get("MUT_DIR") or tempfile.mkdtemp(prefix="tc_mutants_")
 os.makedirs(work, exist_ok=True)
+
+
+def wait_for_quiet():
+    """With QUIET_GATE=1, start each mutant only while `quiet check` reports no live hold."""
+    if os.environ.get("QUIET_GATE") != "1":
+        return
+    while subprocess.run(["quiet", "check"], capture_output=True).returncode == 1:
+        time.sleep(2)
+
+
 survivors = []
 for name, (file, old, new) in MUTANTS.items():
     if only and name not in only:
         continue
+    wait_for_quiet()
     src = open(os.path.join(tree, file), encoding="utf-8").read()
     if src.count(old) != 1:
         print(f"{name}: pattern matches {src.count(old)} times in {file}, fix the table")
@@ -91,7 +114,12 @@ for name, (file, old, new) in MUTANTS.items():
         print(f"{name}: does not compile\n{built.stderr[:400]}")
         survivors.append(name)
         continue
-    ran = subprocess.run([exe], capture_output=True, text=True)
+    try:
+        ran = subprocess.run([exe], capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        print(f"{name}: killed (the test does not finish)")
+        shutil.rmtree(d, ignore_errors=True)
+        continue
     if ran.returncode == 0:
         print(f"{name}: SURVIVED")
         survivors.append(name)

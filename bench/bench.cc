@@ -126,17 +126,25 @@ double best_ns(const std::vector<std::string>& inputs, Fn&& fn, int reps) {
 template <typename Old, typename New>
 void row(const char* set, const char* op, const std::vector<std::string>& inputs, Old&& old_fn, New&& new_fn,
          int reps = 21) {
-	double a1 = best_ns(inputs, old_fn, reps);
-	double b = best_ns(inputs, new_fn, reps);
-	double a2 = best_ns(inputs, old_fn, reps);
-	double a = std::min(a1, a2);
+	// Alternate the two over rounds and keep the best pass of each; "A/A" is the spread between the
+	// frozen original's best in even and odd rounds (how much the host moved during the row).
+	const int rounds = 6;
+	const int per_round = std::max(2, reps / 4);
+	double a_even = 1e300, a_odd = 1e300, b = 1e300;
+	for (int r = 0; r < rounds; ++r) {
+		double a = best_ns(inputs, old_fn, per_round);
+		b = std::min(b, best_ns(inputs, new_fn, per_round));
+		double& slot = r % 2 ? a_odd : a_even;
+		slot = std::min(slot, a);
+	}
+	double a = std::min(a_even, a_odd);
 	double bytes = 0;
 	for (const auto& s : inputs) {
 		bytes += static_cast<double>(s.size());
 	}
 	bytes /= static_cast<double>(inputs.size());
 	std::printf("%-9s %-22s %6.0f B  old %9.1f ns  new %9.1f ns  x%5.2f   A/A %4.1f%%\n", set, op, bytes, a, b, a / b,
-	            100.0 * std::abs(a1 - a2) / a);
+	            100.0 * std::abs(a_even - a_odd) / a);
 }
 
 void collapse_rows(const char* set, const std::vector<std::string>& inputs, int reps = 21) {
@@ -184,6 +192,13 @@ int main() {
 	row("log line", "apply never (strip)", logs,
 	    [&](const std::string& s) { return term_color_old::apply(s, term_color_old::mode::never, term_color_old::target::automatic, true).size(); },
 	    [&](const std::string& s) { return term_color::apply(s, term_color::mode::never, term_color::target::automatic, true).size(); });
+	// A sink that resolves the policy once and applies it to every line.
+	const auto resolved = term_color::resolve(term_color::mode::automatic, term_color::target::automatic, true);
+	row("log line", "apply(resolved) auto", logs,
+	    [&](const std::string& s) {
+		    return term_color_old::apply(s, term_color_old::mode::automatic, term_color_old::target::automatic, true).size();
+	    },
+	    [&](const std::string& s) { return resolved.apply(s).size(); });
 	row("plain", "apply never (strip)", plain,
 	    [&](const std::string& s) { return term_color_old::apply(s, term_color_old::mode::never, term_color_old::target::automatic, true).size(); },
 	    [&](const std::string& s) { return term_color::apply(s, term_color::mode::never, term_color::target::automatic, true).size(); });
@@ -199,11 +214,5 @@ int main() {
 	row("runtime", "name_color().ansi", names,
 	    [](const std::string& s) { return color_tools_old::name_color(s).ansi().size(); },
 	    [](const std::string& s) { return name_color(s).ansi().size(); });
-
-	// What one getenv costs here: apply() asks for three (NO_COLOR, COLORTERM, TERM) per call.
-	std::vector<std::string> one(256, "x");
-	row("env", "getenv x3", one,
-	    [](const std::string&) { return std::size_t(std::getenv("NO_COLOR") != nullptr) + std::size_t(std::getenv("COLORTERM") != nullptr) + std::size_t(std::getenv("TERM") != nullptr); },
-	    [](const std::string&) { return std::size_t(std::getenv("NO_COLOR") != nullptr) + std::size_t(std::getenv("COLORTERM") != nullptr) + std::size_t(std::getenv("TERM") != nullptr); });
 	return 0;
 }

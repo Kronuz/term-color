@@ -190,6 +190,10 @@ void test_apply() {
 								if (got != want) {
 									fail("apply", s, want, got);
 								}
+								auto via_policy = term_color::resolve(m, tg, tty).apply(s);
+								if (via_policy != want) {
+									fail("apply(policy)", s, want, via_policy);
+								}
 							}
 						}
 					}
