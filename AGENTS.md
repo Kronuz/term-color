@@ -24,6 +24,7 @@ README.md                    What it is, install, quick start.
 CHANGELOG.md                 Dated changes, with measurements.
 docs/API.md                  Named colors, the runtime class, apply()/collapse().
 docs/term-color.svg          The demo's output, rendered for the README.
+docs/perf/collapse.md        Method, numbers (Apple M4 Pro, Intel i9-9980HK) and rejected variants of collapse(), color::ansi() and policy.
 ARCHITECTURE.md              The three-tier escape, the downgrade math, why static_string.
 ```
 

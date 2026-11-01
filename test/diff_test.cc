@@ -255,7 +255,7 @@ void test_color(bool full) {
 		}
 	}
 	// name_color and gradient_banner build on color::ansi().
-	for (std::string_view name : {"", "a", "node-1", "node-2", "Xapiand", "10.0.0.1:8890", "a much longer node name for the hash"}) {
+	for (std::string_view name : {"", "a", "node-1", "node-2", "Xapiand", "192.0.2.1:8890", "a much longer node name for the hash"}) {
 		++checked;
 		auto want = color_tools_old::name_color(name).ansi();
 		auto got = name_color(name).ansi();

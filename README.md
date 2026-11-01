@@ -101,7 +101,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DTERM_COLOR_BUILD_BENCH=ON && cmake -
 ./build/term_color_bench
 ```
 
-[CHANGELOG.md](CHANGELOG.md) lists the changes with their measurements.
+[docs/perf/collapse.md](docs/perf/collapse.md) has the method, the numbers by input and the variants that did not win. [CHANGELOG.md](CHANGELOG.md) lists the changes with their measurements.
 
 ## 📚 Documentation
 

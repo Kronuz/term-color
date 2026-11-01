@@ -6,20 +6,21 @@ test/diff_test.cc against them (with the frozen originals) and require that the 
 crashes. A mutant that survives means the differential test would not catch that bug.
 
 usage: tools/mutants.py TREE_DIR [CXX] [only-name ...]
-       env: MUT_DIR (scratch dir), STATIC_STRING (directory holding static_string.hh),
-            QUIET_GATE=1 (start each mutant only while `quiet check` reports no live hold)
+       env: MUT_DIR (scratch dir), STATIC_STRING (directory holding static_string.hh; by default
+            TREE_DIR/build/_deps/static_string-src, where a configured build fetches it)
 """
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
-import time
 
 tree = os.path.abspath(sys.argv[1])
 cxx = sys.argv[2] if len(sys.argv) > 2 else "c++"
 only = set(sys.argv[3:])
-static_string = os.environ.get("STATIC_STRING", os.path.expanduser("~/code/Kronuz/libs/static-string"))
+static_string = os.environ.get("STATIC_STRING", os.path.join(tree, "build", "_deps", "static_string-src"))
+if not os.path.exists(os.path.join(static_string, "static_string.hh")):
+    sys.exit(f"static_string.hh not found in {static_string}: configure a build in {tree}/build or set STATIC_STRING")
 
 # name: (file, old, new)
 MUTANTS = {
@@ -82,19 +83,10 @@ work = os.environ.get("MUT_DIR") or tempfile.mkdtemp(prefix="tc_mutants_")
 os.makedirs(work, exist_ok=True)
 
 
-def wait_for_quiet():
-    """With QUIET_GATE=1, start each mutant only while `quiet check` reports no live hold."""
-    if os.environ.get("QUIET_GATE") != "1":
-        return
-    while subprocess.run(["quiet", "check"], capture_output=True).returncode == 1:
-        time.sleep(2)
-
-
 survivors = []
 for name, (file, old, new) in MUTANTS.items():
     if only and name not in only:
         continue
-    wait_for_quiet()
     src = open(os.path.join(tree, file), encoding="utf-8").read()
     if src.count(old) != 1:
         print(f"{name}: pattern matches {src.count(old)} times in {file}, fix the table")

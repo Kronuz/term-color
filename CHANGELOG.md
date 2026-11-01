@@ -4,6 +4,16 @@ Notable changes to term-color, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); entries are dated because the
 library has no releases.
 
+## 2026-11-01
+
+### Added
+
+- `docs/perf/collapse.md`: the method, the numbers on two machines, and the variants that did not win.
+
+### Fixed
+
+- `tools/mutants.py` finds `static_string.hh` in the build directory's fetched copy (or in `STATIC_STRING`) and no longer reads a fixed path in a home directory.
+
 ## 2026-10-31
 
 ### Changed
@@ -36,8 +46,8 @@ library has no releases.
 - `fuzz/fuzz_collapse.cc`, a libFuzzer target of the same comparison (`TERM_COLOR_FUZZ`).
 - `bench/bench.cc` (`TERM_COLOR_BUILD_BENCH`) times all of it against the frozen copies.
 
-Time per call on an Apple M4 Pro (Apple clang 17, `-O3`), from `bench/bench.cc` under an
-exclusive hold. Before is the frozen code in `test/collapse_old.hh` and
+Time per call on an Apple M4 Pro (Apple clang 17, `-O3`), from `bench/bench.cc` with the machine
+to itself. Before is the frozen code in `test/collapse_old.hh` and
 `test/color_tools_old.hh`; each figure is the best of several alternating passes, and the frozen
 code run against itself differs by 0.0% to 3.6% (8.2% on one 64K row):
 
@@ -66,7 +76,7 @@ In the `apply` rows, the difference between the automatic and the fixed tier is 
 `policy::apply` row compares a sink that resolved the policy once with the old `apply` called on
 every line.
 
-On an Intel i9-9980HK (Apple clang 17, `-O3`, exclusive hold; the frozen code run against itself
+On an Intel i9-9980HK (Apple clang 17, `-O3`, machine to itself; the frozen code run against itself
 differs by 0.0% to 4.8%, and 11.4% on one 64K row):
 
 | input | call | before | after | speedup |
