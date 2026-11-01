@@ -1,9 +1,14 @@
 // Benchmark: collapse(), apply() and color::ansi() against the frozen originals
-// (test/collapse_old.hh, test/color_tools_old.hh).
+// (test/collapse_old.hh, test/color_tools_old.hh), and collapse() against two ways a caller would
+// reduce stacked escapes without the library.
 //
-// No other library resolves stacked SGR escapes, so the baseline is the frozen original. Each row
-// is the best of several passes over a rotating set of inputs; "A/A" times the frozen original
-// against itself and shows the noise of the run.
+// No other library resolves stacked SGR escapes, so the comparators are code written for the
+// purpose: "loop", a hand-written scan (string_view::find for each ESC and each 'm', a count per run
+// of escapes, then the escapes to keep appended to the output), and "regex", std::regex_replace with
+// the escape's pattern. Before any timing every comparator is checked against collapse() on every
+// input at every depth; a difference aborts the run. Each row is the best of several passes over a
+// rotating set of inputs; "A/A" times the frozen original against itself and shows the noise of the
+// run.
 //
 // Build: cmake -B build -DCMAKE_BUILD_TYPE=Release -DTERM_COLOR_BUILD_BENCH=ON
 //        cmake --build build --target term_color_bench
@@ -14,8 +19,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <iterator>
 #include <random>
+#include <regex>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -105,6 +113,88 @@ std::vector<std::string> long_text(bool with_color) {
 	return v;
 }
 
+// A hand-written reduction: the loop a caller writes without the library. It finds each ESC with
+// string_view::find, counts a run of SGR escapes (ESC [ ... m) and then drops the run (`none`), keeps
+// the escape of the chosen tier from each stacked triple, or copies a run whose length is not a
+// multiple of three unchanged. Plain stretches are appended in one call.
+std::string loop_collapse(std::string_view s, term_color::depth d) {
+	using term_color::depth;
+	const std::size_t pick = d == depth::truecolor ? 2 : d == depth::ansi256 ? 1 : 0;
+	const bool strip = d == depth::none;
+	constexpr auto npos = std::string_view::npos;
+	const std::size_t n = s.size();
+	auto escape_end = [&](std::size_t from) {
+		const std::size_t m = s.find('m', from + 2);
+		return m == npos ? n : m + 1;
+	};
+	std::string out;
+	out.reserve(n);
+	std::size_t i = 0;
+	while (i < n) {
+		const std::size_t esc = s.find('\033', i);
+		if (esc == npos) {
+			out.append(s.substr(i));
+			break;
+		}
+		out.append(s.substr(i, esc - i));
+		i = esc;
+		if (i + 1 >= n || s[i + 1] != '[') {
+			out.push_back('\033');
+			++i;
+			continue;
+		}
+		std::size_t count = 0, j = i;
+		while (j + 1 < n && s[j] == '\033' && s[j + 1] == '[') {
+			j = escape_end(j);
+			++count;
+		}
+		if (!strip) {
+			if (count % 3 != 0) {
+				out.append(s.substr(i, j - i));
+			} else {
+				std::size_t k = i, index = 0;
+				while (k < j) {
+					const std::size_t e = escape_end(k);
+					if (index++ % 3 == pick) {
+						out.append(s.substr(k, e - k));
+					}
+					k = e;
+				}
+			}
+		}
+		i = j;
+	}
+	return out;
+}
+
+// The same reduction with std::regex: one pattern per depth, `none` removes every escape, a tier
+// replaces each stacked triple with its own escape.
+std::string regex_collapse(std::string_view s, term_color::depth d) {
+	using term_color::depth;
+	static const std::regex strip(R"(\x1b\[[^m]*m)");
+	static const std::regex tier16(R"((\x1b\[[^m]*m)\x1b\[[^m]*m\x1b\[[^m]*m)");
+	static const std::regex tier256(R"(\x1b\[[^m]*m(\x1b\[[^m]*m)\x1b\[[^m]*m)");
+	static const std::regex tier24(R"(\x1b\[[^m]*m\x1b\[[^m]*m(\x1b\[[^m]*m))");
+	const std::regex& re = d == depth::none ? strip : d == depth::ansi16 ? tier16 : d == depth::ansi256 ? tier256 : tier24;
+	std::string out;
+	out.reserve(s.size());
+	std::regex_replace(std::back_inserter(out), s.data(), s.data() + s.size(), re, d == depth::none ? "" : "$1");
+	return out;
+}
+
+// Aborts when a comparator's bytes differ from collapse() on any input at any depth.
+void check_comparators(const char* set, const std::vector<std::string>& inputs) {
+	for (auto d : {term_color::depth::none, term_color::depth::ansi16, term_color::depth::ansi256, term_color::depth::truecolor}) {
+		for (const auto& s : inputs) {
+			const std::string want = term_color::collapse(s, d);
+			if (loop_collapse(s, d) != want || regex_collapse(s, d) != want) {
+				std::fprintf(stderr, "a comparator differs from collapse() on the %s inputs at depth %d\n", set, static_cast<int>(d));
+				std::exit(1);
+			}
+		}
+	}
+}
+
 volatile std::size_t sink = 0;
 
 template <typename Fn>
@@ -161,6 +251,32 @@ void collapse_rows(const char* set, const std::vector<std::string>& inputs, int 
 	}
 }
 
+// collapse() against the hand-written loop and std::regex at one depth. Rounds alternate the three
+// and keep the best pass of each; "x loop" and "x regex" are their time over collapse()'s.
+void compare_rows(const char* set, const std::vector<std::string>& inputs, int reps = 21) {
+	struct { const char* name; term_color::depth d; } depths[] = {
+		{"to none", term_color::depth::none},
+		{"to truecolor", term_color::depth::truecolor},
+	};
+	double bytes = 0;
+	for (const auto& s : inputs) {
+		bytes += static_cast<double>(s.size());
+	}
+	bytes /= static_cast<double>(inputs.size());
+	for (auto& x : depths) {
+		const int rounds = 6;
+		const int per_round = std::max(2, reps / 4);
+		double lib = 1e300, loop = 1e300, rx = 1e300;
+		for (int r = 0; r < rounds; ++r) {
+			lib = std::min(lib, best_ns(inputs, [&](const std::string& s) { return term_color::collapse(s, x.d).size(); }, per_round));
+			loop = std::min(loop, best_ns(inputs, [&](const std::string& s) { return loop_collapse(s, x.d).size(); }, per_round));
+			rx = std::min(rx, best_ns(inputs, [&](const std::string& s) { return regex_collapse(s, x.d).size(); }, per_round));
+		}
+		std::printf("%-9s %-14s %6.0f B  collapse %9.1f ns  loop %9.1f ns  x%5.2f  regex %11.1f ns  x%6.2f\n", set, x.name, bytes, lib, loop,
+		            loop / lib, rx, rx / lib);
+	}
+}
+
 } // namespace
 
 int main() {
@@ -176,6 +292,19 @@ int main() {
 	collapse_rows("colorful", colorful);
 	collapse_rows("64K plain", long_plain, 9);
 	collapse_rows("64K color", long_color, 9);
+
+	// The comparators first agree with collapse() byte for byte, then are timed against it.
+	check_comparators("plain", plain);
+	check_comparators("log line", logs);
+	check_comparators("colorful", colorful);
+	check_comparators("64K plain", long_plain);
+	check_comparators("64K color", long_color);
+	std::printf("comparators: loop and regex give collapse()'s bytes on every input at every depth\n");
+	compare_rows("plain", plain);
+	compare_rows("log line", logs);
+	compare_rows("colorful", colorful);
+	compare_rows("64K plain", long_plain, 9);
+	compare_rows("64K color", long_color, 9);
 
 	// apply(): the gating, the environment lookups and the collapse, as a logger sink calls it.
 	setenv("COLORTERM", "truecolor", 1);

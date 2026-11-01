@@ -16,7 +16,7 @@ test/test.cc                 Runnable smoke test: named-color escapes (static_as
 test/diff_test.cc            Differential test (CTest `term_color_diff`): collapse(), apply() and color::ansi() against the frozen originals, 20M comparisons.
 test/collapse_old.hh         Frozen collapse.hh at 032ef09, namespace term_color_old. The oracle of diff_test.cc and the baseline of bench/bench.cc. Never edit it.
 test/color_tools_old.hh      Frozen color_tools.hh at 032ef09, namespace color_tools_old. Same role. Never edit it.
-bench/bench.cc               Benchmark against the frozen copies (TERM_COLOR_BUILD_BENCH=ON), with an A/A column.
+bench/bench.cc               Benchmark against the frozen copies (TERM_COLOR_BUILD_BENCH=ON), with an A/A column, and collapse() against a hand-written loop and std::regex (checked to return the same bytes before any timing).
 tools/mutants.py             Breaks collapse(), the color class and the policy in 25 ways and requires test/diff_test.cc to fail on each.
 CMakeLists.txt               INTERFACE library `term_color` (+ alias term_color::term_color); FetchContent static-string; CTest tests `term_color`, `term_color_binary_has_stack`, `term_color_diff`.
 LICENSE                      MIT, Copyright (c) 2015-2019 Dubalu LLC.
