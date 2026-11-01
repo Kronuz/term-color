@@ -12,7 +12,7 @@ Output is identical to the frozen code (`test/collapse_old.hh`, `test/color_tool
 
 ## Method
 
-- Bench: `bench/bench.cc`, target `term_color_bench` (`-DTERM_COLOR_BUILD_BENCH=ON`), `./build/term_color_bench`. No other library resolves stacked SGR escapes, so the baseline is the frozen code.
+- Bench: `bench/bench.cc`, target `term_color_bench` (`-DTERM_COLOR_BUILD_BENCH=ON`), `./build/term_color_bench`. No other library resolves stacked SGR escapes, so the baseline is the frozen code, and the comparators are a hand-written loop and `std::regex` (below).
 - Inputs: a plain line (110 B); a log line as the logger writes it (478 B: six gradient timestamp groups, a colored priority marker and a reset around 40 to 100 characters of text, 7 colors and 8 resets); a colorful line (1366 B: 24 colored words, 24 colors and 24 resets); 64 KB of plain text; 64 KB with a color per 40 characters; one RGB value; an 11-character name.
 - Each figure is the best of several alternating passes over a rotating set of inputs. "A/A" times the frozen code against itself: 0.0% to 3.6% on the Apple M4 Pro (8.2% on one 64 KB row) and 0.0% to 4.8% on the Intel Core i9-9980HK (11.4% on one 64 KB row).
 - Machines: Apple M4 Pro and Intel Core i9-9980HK (macOS 15, x86_64). Apple clang 17, `-O3`, with the machine to itself.
@@ -64,6 +64,66 @@ Intel Core i9-9980HK:
 | 11-character name | `name_color(name).ansi()` | 536.2 ns | 168.7 ns | 3.18x |
 
 In the `apply` rows, the gap between the automatic and the fixed tier is the lookup of `COLORTERM` (and of `NO_COLOR` for the gate): 80 to 130 ns a call on the M4 Pro, about as much as collapsing the log line. The `policy::apply` row compares a sink that resolved the policy once with `apply` called on every line.
+
+## Against a hand-written loop and std::regex
+
+Measured at `term-color:fc4113d`, the best of two runs of `./build/term_color_bench`, on the Apple M4
+Pro (macOS 26) and the Intel Core i9-9980HK (macOS 15), Apple clang 17, CMake Release (`-O3 -DNDEBUG`),
+each with the machine to itself. The frozen original's A/A (it timed against itself) is at most 3.0%
+on the M4 Pro and 9.3% on the i9 over every row of a run.
+
+No other C++ library resolves term-color's stacked escapes, so the comparators are code a caller
+would write:
+
+- **loop**: `loop_collapse()` in `bench/bench.cc`. It finds each ESC with `std::string_view::find`
+  and appends the plain stretch in one call, walks each run of `ESC [ ... m` escapes counting them,
+  and then drops the run (`none`), keeps the escape of the chosen tier from each stacked triple, or
+  copies a run whose length is not a multiple of three unchanged.
+- **std::regex**: `regex_collapse()`: `std::regex_replace` with `\x1b\[[^m]*m` for `none` and, for a
+  tier, a pattern of three such escapes whose group 1 replaces the triple. It is libc++'s `<regex>`.
+
+Before it times anything the bench compares both with `collapse()` on every input at every depth,
+byte for byte, and exits on a difference. They agree on these inputs; they are not the same
+function on malformed text. At depth `none`, an escape with no `m` after it is dropped through the
+end of the line by `collapse()` and the loop and left in place by the regex, and at a tier a run
+whose length is not a multiple of three is left alone by `collapse()` and the loop and partly
+reduced by the regex.
+
+Nanoseconds per call (`std::regex` in microseconds):
+
+| Input | Depth | M4 Pro term-color | loop | `std::regex` (µs) | i9 term-color | loop | `std::regex` (µs) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Plain line, 110 B | `none` | 27.3 | 26.0 | 4.3 | 70.2 | 60.1 | 13.6 |
+| | `truecolor` | 25.6 | 24.1 | 6.3 | 67.0 | 57.4 | 19.6 |
+| Log line, 478 B | `none` | 159.5 | 423.7 | 17.9 | 310.9 | 464.6 | 54.1 |
+| | `truecolor` | 164.7 | 495.0 | 22.5 | 379.7 | 828.9 | 69.3 |
+| Colorful line, 1,366 B | `none` | 578.9 | 1,682.8 | 51.2 | 1,049.8 | 1,589.4 | 158.2 |
+| | `truecolor` | 682.0 | 1,960.0 | 62.4 | 1,277.3 | 2,571.8 | 184.5 |
+| 64 KB of plain text | `none` | 2,041.5 | 1,823.0 | 2,687 | 3,153.5 | 2,236.0 | 7,808 |
+| | `truecolor` | 2,062.5 | 1,843.8 | 3,951 | 3,130.2 | 2,268.0 | 11,544 |
+| 64 KB, a color per 40 characters | `none` | 14,135.5 | 41,416.8 | 2,508 | 25,007.8 | 36,235.2 | 7,672 |
+| | `truecolor` | 19,343.8 | 57,885.2 | 3,287 | 28,886.0 | 66,022.5 | 9,912 |
+
+The loop beats `collapse()` on plain text on both machines (0.71 to 0.95 of its time). `collapse()`
+copies plain text eight bytes at a time and hands only stretches of 64 bytes or more to `memchr`; the
+loop hands every stretch to `find`. On text with escapes `collapse()` takes 0.33 to 0.38 of the loop's
+time on the M4 Pro and 0.44 to 0.69 on the i9.
+
+## Every depth
+
+`collapse()` alone, in nanoseconds, from the same runs (the `new` column of the rows that time it
+against the frozen original, best of the two runs):
+
+| Input | M4 Pro `none` | `ansi16` | `ansi256` | `truecolor` | i9 `none` | `ansi16` | `ansi256` | `truecolor` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Plain line, 110 B | 35.0 | 34.7 | 35.0 | 30.8 | 71.3 | 70.6 | 70.5 | 70.4 |
+| Log line, 478 B | 156.9 | 176.9 | 169.3 | 166.5 | 345.8 | 402.1 | 395.7 | 395.3 |
+| Colorful line, 1,366 B | 552.7 | 679.2 | 635.3 | 648.9 | 1,096.2 | 1,347.5 | 1,327.0 | 1,333.7 |
+| 64 KB of plain text | 2,031.2 | 2,052.0 | 2,000.0 | 2,041.5 | 3,136.5 | 3,182.2 | 3,048.5 | 3,043.0 |
+| 64 KB, a color per 40 characters | 13,416.8 | 16,583.2 | 15,927.2 | 20,208.2 | 24,993.5 | 29,044.8 | 28,535.2 | 28,704.5 |
+
+The two blocks of a run time `collapse()` in separate loops, so the same call differs by up to 25%
+between them (the 110-byte line on the M4 Pro: 27 and 35 ns); the comparison table uses one block.
 
 ## Proof
 

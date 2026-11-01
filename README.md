@@ -24,7 +24,7 @@ output is a terminal. Reach for it for colored logs and command-line tools.
   escapes; a terminal keeps the best one it understands.
 - **Correct for pipes and logs.** `apply()` resolves colors to one tier, or strips them,
   by `--color` mode, `NO_COLOR`, and whether the sink is a terminal.
-- **One pass to resolve.** `collapse()` reduces a 478-byte log line in 144 ns on an
+- **One pass to resolve.** `collapse()` reduces a 478-byte log line in 160 ns on an
   Apple M4 Pro (see [Performance](#-performance)).
 - **Runtime colors too.** `hsv2rgb` and a `color` class for values known only at
   runtime, a stable color per name (`name_color`), and gradient startup banners.
@@ -86,30 +86,51 @@ Not for:
 
 ## ⚡ Performance
 
-Time for `collapse()` to resolve one stacked line, from `bench/bench.cc`:
+Time for `collapse(s, depth)` to reduce one line of stacked escapes (each color carries three,
+for 16-color, 256-color and truecolor) to one depth, from `bench/bench.cc`. The depths are
+output modes of this one function, not competing libraries: `none` strips every escape, as for
+a pipe or `NO_COLOR`; `truecolor` keeps each color's 24-bit escape. `ansi16` and `ansi256` cost
+about as much as `truecolor` ([docs/perf/collapse.md](docs/perf/collapse.md)). The comparators are what a
+caller writes without the library, since no other C++ library resolves stacked escapes: a
+hand-written loop that finds each ESC with `std::string_view::find` and keeps the escape of the
+chosen tier from each triple, and `std::regex_replace` from libc++ (Apple clang 17) with one
+pattern per depth. Both return term-color's bytes on every bench input at every depth; the
+bench checks that before it times anything. The inputs are a plain line, a log line as a
+logger writes it (a gradient timestamp and a colored priority marker), a line of colored words,
+and 64 KB of plain text. Times are per line, in nanoseconds (`std::regex` in microseconds),
+the best of two runs:
 
-| Input | Apple M4 Pro, to `none` | to `truecolor` | Intel Core i9-9980HK, to `none` | to `truecolor` |
-| --- | ---: | ---: | ---: | ---: |
-| Plain line, 110 B | 36 ns | 36 ns | 82 ns | 78 ns |
-| Log line, 478 B | 144 ns | 173 ns | 308 ns | 445 ns |
-| Colorful line, 1,366 B | 470 ns | 664 ns | 949 ns | 1,455 ns |
-| 64 KB of plain text | 2.1 µs | 2.1 µs | 3.0 µs | 3.0 µs |
+| Input | Depth | M4 Pro: term-color (ns) | loop (ns) | `std::regex` (µs) | i9: term-color (ns) | loop (ns) | `std::regex` (µs) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Plain line, 110 B | `none` | 27 | **26** | 4.3 | 70 | **60** | 13.6 |
+| Plain line, 110 B | `truecolor` | 26 | **24** | 6.3 | 67 | **57** | 19.6 |
+| Log line, 478 B | `none` | **160** | 424 | 17.9 | **311** | 465 | 54.1 |
+| Log line, 478 B | `truecolor` | **165** | 495 | 22.5 | **380** | 829 | 69.3 |
+| Colorful line, 1,366 B | `none` | **579** | 1,683 | 51.2 | **1,050** | 1,589 | 158.2 |
+| Colorful line, 1,366 B | `truecolor` | **682** | 1,960 | 62.4 | **1,277** | 2,572 | 184.5 |
+| 64 KB of plain text | `none` | 2,042 | **1,823** | 2,687 | 3,154 | **2,236** | 7,808 |
+| 64 KB of plain text | `truecolor` | 2,063 | **1,844** | 3,951 | 3,130 | **2,268** | 11,544 |
 
-`color::ansi()` for one RGB value takes 38 ns on the M4 Pro and 80 ns on the i9.
-`apply()` reads `NO_COLOR`, `COLORTERM`, and `TERM` on every call; a sink that writes
-many lines calls `resolve()` once and `policy::apply()` per line, 174 ns for the log
-line on the M4 Pro (444 ns on the i9) against 721 ns (1,065 ns) for `apply()` on every
-line.
+On lines with escapes term-color takes 0.33 to 0.38 of the loop's time on the M4 Pro and 0.46 to
+0.67 on the i9. On plain text the loop takes 0.71 to 0.95 of term-color's time, and `std::regex` takes
+roughly 90 to 3,700 times as long as term-color everywhere.
 
-Apple clang 17, `-O3`, macOS 15 on both machines:
+`color::ansi()` for one RGB value takes 29 ns on the M4 Pro and 80 ns on the i9. `apply()` reads
+`NO_COLOR`, `COLORTERM`, and `TERM` on every call; on the 478-byte log line it takes 402 ns on the
+M4 Pro (527 ns on the i9), against 175 ns (365 ns) for `policy::apply()` after one `resolve()`, which is what a
+sink that writes many lines should call.
+
+Apple M4 Pro (macOS 26) and Intel Core i9-9980HK (macOS 15), Apple clang 17, `-O3 -DNDEBUG`
+(CMake's Release), each with the machine to itself:
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DTERM_COLOR_BUILD_BENCH=ON
-cmake --build build
+cmake --build build --target term_color_bench
 ./build/term_color_bench
 ```
 
-[docs/perf/collapse.md](docs/perf/collapse.md) has the method and the numbers by input.
+[docs/perf/collapse.md](docs/perf/collapse.md) has the method, the other depths, 64 KB with
+colors, and the frozen-original rows.
 
 ## 📚 Documentation
 
