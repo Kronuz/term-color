@@ -7,11 +7,10 @@ Part of [Kronuz C++ Libraries](https://github.com/Kronuz/cpp-libraries), a colle
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)
 ![Header-only](https://img.shields.io/badge/header--only-yes-green.svg)
 
-Compile-time ANSI terminal colors for C++20: 151 named colors that carry 16-color,
-256-color, and truecolor escapes in one constant. A runtime layer collapses each line to
-the one tier the terminal understands, or strips the colors, by `--color`, `NO_COLOR`,
-and whether the output is a terminal. Reach for it for colored logs and command-line
-tools.
+Compile-time ANSI terminal colors for C++20: 151 named colors, each carrying 16-color,
+256-color, and truecolor escapes. A runtime layer collapses a line to the one tier the
+terminal understands, or strips the colors, by `--color`, `NO_COLOR`, and whether the
+output is a terminal. Reach for it for colored logs and command-line tools.
 
 ![term-color: the demo's output in a truecolor terminal](docs/term-color.svg)
 
