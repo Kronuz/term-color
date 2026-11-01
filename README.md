@@ -91,6 +91,11 @@ Resolving a stacked color line is one pass over it. On an Apple M4 Pro (Apple cl
 once and `policy::apply()` per line (174 ns for the log line above, against 721 ns for
 `apply()` on every line in the same loop).
 
+On an Intel i9-9980HK the same rows take 82 and 78 ns (plain line), 308 and 445 ns (log line),
+949 and 1455 ns (colorful line) and 3.0 µs (64 KB of plain text) for `none` and `truecolor`;
+`color::ansi()` takes 80 ns, and `policy::apply()` 444 ns on the log line against 1065 ns for
+`apply()` on every line.
+
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DTERM_COLOR_BUILD_BENCH=ON && cmake --build build
 ./build/term_color_bench

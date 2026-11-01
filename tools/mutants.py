@@ -53,8 +53,8 @@ MUTANTS = {
     "escape_word_scan": ("collapse.hh", "0x6d6d6d6d6d6d6d6dull", "0x6e6e6e6e6e6e6e6eull"),
     # a short escape copy loses its last byte
     "copy_small_short": ("collapse.hh", "\t\tfor (std::size_t i = 0; i < n; ++i) {\n\t\t\tto[i] = from[i];", "\t\tfor (std::size_t i = 0; i + 1 < n; ++i) {\n\t\t\tto[i] = from[i];"),
-    # the overlapping tail of a longer escape copy is misplaced
-    "copy_small_tail": ("collapse.hh", "std::memcpy(to + n - 8, from + n - 8, 8);", "std::memcpy(to + n - 7, from + n - 7, 8);"),
+    # the overlapping tail of a longer escape copy reads from the wrong place
+    "copy_small_tail": ("collapse.hh", "std::memcpy(to + n - 8, from + n - 8, 8);", "std::memcpy(to + n - 8, from + n - 9, 8);"),
     # a resolved policy strips where it should color
     "policy_color": ("collapse.hh", "\t\tif (!color) {\n\t\t\treturn collapse(s, depth::none);", "\t\tif (color) {\n\t\t\treturn collapse(s, depth::none);"),
     # hundreds are not written for 100

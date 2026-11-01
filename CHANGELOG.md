@@ -66,6 +66,29 @@ In the `apply` rows, the difference between the automatic and the fixed tier is 
 `policy::apply` row compares a sink that resolved the policy once with the old `apply` called on
 every line.
 
+On an Intel i9-9980HK (Apple clang 17, `-O3`, exclusive hold; the frozen code run against itself
+differs by 0.0% to 4.8%, and 11.4% on one 64K row):
+
+| input | call | before | after | speedup |
+| --- | --- | ---: | ---: | ---: |
+| plain line, 110 B | `collapse` to `none` | 433.6 ns | 81.5 ns | 5.32x |
+| | `collapse` to `truecolor` | 417.8 ns | 78.0 ns | 5.35x |
+| log line, 478 B | `collapse` to `none` | 611.9 ns | 308.2 ns | 1.99x |
+| | `collapse` to `ansi16` | 906.5 ns | 448.7 ns | 2.02x |
+| | `collapse` to `truecolor` | 905.3 ns | 444.6 ns | 2.04x |
+| colorful line, 1366 B | `collapse` to `none` | 1479.2 ns | 949.0 ns | 1.56x |
+| | `collapse` to `ansi16` | 2446.1 ns | 1444.6 ns | 1.69x |
+| | `collapse` to `truecolor` | 2424.7 ns | 1454.8 ns | 1.67x |
+| 64 KB of plain text | `collapse` to `none` | 181.0 µs | 3.00 µs | 60.4x |
+| 64 KB with a color per 40 characters | `collapse` to `none` | 110.7 µs | 22.3 µs | 4.97x |
+| | `collapse` to `truecolor` | 138.0 µs | 35.3 µs | 3.91x |
+| log line | `apply`, always + automatic tier | 1003.1 ns | 529.9 ns | 1.89x |
+| | `apply`, automatic + automatic | 1068.6 ns | 595.7 ns | 1.79x |
+| | `apply`, never (strip) | 434.0 ns | 303.2 ns | 1.43x |
+| | `policy::apply`, resolved once | 1065.0 ns | 443.6 ns | 2.40x |
+| `color` of one RGB value | `ansi()` | 435.8 ns | 80.4 ns | 5.42x |
+| 11-character name | `name_color(name).ansi()` | 536.2 ns | 168.7 ns | 3.18x |
+
 The "log line" is a decorated line as the logger writes it: six gradient timestamp groups,
 a colored priority marker and a reset around 40 to 100 characters of text (7 colors and
 8 resets). The "colorful line" has 24 colored words (24 colors and 24 resets).
