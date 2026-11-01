@@ -10,11 +10,18 @@ easy to fall into.
 ```
 ansi_color.hh                ansi_color<r,g,b,bold> template + rgb()/rgba()/brgb()/brgba()/clear_color()/no_color() macros + ESC. Header.
 colors.h                     151 named static constexpr colors + NO_COLOR / CLEAR_COLOR. Includes ansi_color.hh.
-color_tools.hh               hsv2rgb() and the runtime `color` class (std::format). Includes ansi_color.hh.
+collapse.hh                  collapse()/apply()/detect_depth(): resolve the stacked escapes to one tier. Header, std only.
+color_tools.hh               hsv2rgb() and the runtime `color` class (hand-written escape writer). Includes ansi_color.hh.
 test/test.cc                 Runnable smoke test: named-color escapes (static_assert), bold/concat, hsv2rgb, the color class.
-CMakeLists.txt               INTERFACE library `term_color` (+ alias term_color::term_color); FetchContent static-string; CTest test `term_color`.
+test/diff_test.cc            Differential test (CTest `term_color_diff`): collapse(), apply() and color::ansi() against the frozen originals, 20M comparisons.
+test/collapse_old.hh         Frozen collapse.hh at 032ef09, namespace term_color_old. The oracle of diff_test.cc and the baseline of bench/bench.cc. Never edit it.
+test/color_tools_old.hh      Frozen color_tools.hh at 032ef09, namespace color_tools_old. Same role. Never edit it.
+bench/bench.cc               Benchmark against the frozen copies (TERM_COLOR_BUILD_BENCH=ON), with an A/A column.
+tools/mutants.py             Breaks collapse() and the color class in 20 ways and requires test/diff_test.cc to fail on each.
+CMakeLists.txt               INTERFACE library `term_color` (+ alias term_color::term_color); FetchContent static-string; CTest tests `term_color`, `term_color_binary_has_stack`, `term_color_diff`.
 LICENSE                      MIT, Copyright (c) 2015-2019 Dubalu LLC.
 README.md                    What it is, install, quick start.
+CHANGELOG.md                 Dated changes, with measurements.
 docs/API.md                  Named colors, the runtime class, apply()/collapse().
 docs/term-color.svg          The demo's output, rendered for the README.
 ARCHITECTURE.md              The three-tier escape, the downgrade math, why static_string.
@@ -44,7 +51,8 @@ is `term_color_test`; the registered CTest name is `term_color`.
 - **One dependency: static-string.** The only non-stdlib include is
   `static_string.hh`, which is what the compile-time escapes are built on. Don't
   add Xapiand headers back, and don't reintroduce `strings.hh` /
-  `strings::format` — `color_tools.hh` uses `std::format` on purpose.
+  `strings::format`. `color_tools.hh` uses `std::format` for the banner lines, and
+  writes the escapes of `color::ansi()` by hand.
 - **No logging glue here.** The `L_*` shortcut macros that lived in Xapiand's
   `colors.h` are log glue, not color machinery, and were removed during
   extraction (see "Standalone vs. Xapiand"). Don't add logging dependencies.
@@ -76,6 +84,10 @@ is `term_color_test`; the registered CTest name is `term_color`.
 - **Channels are clamped.** `ansi_color` clamps r/g/b to `[0, 255]`. Keep the
   clamp; `rgb(...)` is fed arbitrary expressions (including `rgba`'s
   alpha-premultiplied values) that can land out of range.
+- **The output of `collapse()` and `color::ansi()` is pinned by `test/diff_test.cc`.**
+  Both equal the frozen originals byte for byte on every input, and the test needs
+  every `(r, g, b)` for `color` (`--full` checks all 2^24). A change to either is an
+  owner decision. After touching them, run `tools/mutants.py`.
 
 ## How to extend
 

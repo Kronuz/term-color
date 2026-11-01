@@ -46,6 +46,28 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_test(NAME term_color_binary_has_stack
     COMMAND grep -q "38;2;63;119;179" "$<TARGET_FILE:term_color_test>")
 
+  # Differential test: collapse(), apply() and color::ansi() against frozen copies of the
+  # originals (test/collapse_old.hh, test/color_tools_old.hh).
+  add_executable(term_color_diff_test test/diff_test.cc)
+  target_link_libraries(term_color_diff_test PRIVATE term_color)
+  add_test(NAME term_color_diff COMMAND term_color_diff_test)
+
+  # Benchmark against the frozen originals (not run by ctest).
+  option(TERM_COLOR_BUILD_BENCH "Build bench/bench.cc" OFF)
+  if(TERM_COLOR_BUILD_BENCH)
+    add_executable(term_color_bench bench/bench.cc)
+    target_link_libraries(term_color_bench PRIVATE term_color)
+  endif()
+
+  # libFuzzer target (clang): collapse() on arbitrary bytes against the frozen original.
+  option(TERM_COLOR_FUZZ "Build the libFuzzer target" OFF)
+  if(TERM_COLOR_FUZZ)
+    add_executable(term_color_fuzz fuzz/fuzz_collapse.cc)
+    target_link_libraries(term_color_fuzz PRIVATE term_color)
+    target_compile_options(term_color_fuzz PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all)
+    target_link_options(term_color_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+  endif()
+
   # A runnable tour of the library (not a test): build & run ./build/term_color_demo
   add_executable(term_color_demo examples/demo.cc)
   target_link_libraries(term_color_demo PRIVATE term_color)

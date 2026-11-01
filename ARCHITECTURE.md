@@ -68,7 +68,11 @@ resolve any stacked output without dragging in `static_string`.
   term-color stack, so it is passed through untouched. A lone `ESC[1m` next to a
   color therefore makes a run of four and defeats the collapse. That is why bold
   belongs *inside* the color (`brgb` / `color::ansi(true)`), where it rides each of
-  the three tiers and the run stays a clean triple.
+  the three tiers and the run stays a clean triple. The result is written into one
+  buffer sized to the input (it never outgrows it). Plain text between escapes is
+  found with `memchr` and copied in bulk. Each run of escapes is walked once: the
+  walk copies the escape of the chosen tier as it goes, and a run that turns out
+  not to be a multiple of three is rewound and copied as it was.
 - **`detect_depth(respect_no_color = true)`** reads the best tier from the
   environment: `NO_COLOR` (when respected) → `none`, then `COLORTERM`
   (`truecolor`/`24bit`) → truecolor, then `TERM` (`*256color*`) → 256, else 16.
@@ -111,10 +115,11 @@ unused colors fold away.
 `hsv2rgb` converts an HSV triple (hue in degrees, saturation and value as
 fractions) to RGB fractions — the standard sextant algorithm. The `color` class
 is a non-`constexpr` mirror of `ansi_color`: it stores the three channels and its
-`ansi(bool bold)` formats the same three-tier escape with `std::format` instead
-of `static_string`. Same bytes, runtime path. (In Xapiand this used the in-house
-`strings::format`, a thin `std::vformat` wrapper; standalone it is `std::format`
-directly.)
+`ansi(bool bold)` writes the same three-tier escape, digit by digit, into a stack
+buffer and copies it once into the returned string. Same bytes, runtime path. The
+palette indices (the 256-color cube and gray ramp, the 16-color threshold) are
+computed by two private helpers with the arithmetic that `ansi_color` pins.
+`gradient_banner` still formats its right-aligned info lines with `std::format`.
 
 ## Why this shape
 

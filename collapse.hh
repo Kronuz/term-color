@@ -44,6 +44,7 @@
 
 #include <cstddef>          // for std::size_t
 #include <cstdlib>          // for std::getenv
+#include <cstring>          // for std::memchr, std::memcpy
 #include <string>           // for std::string
 #include <string_view>      // for std::string_view
 
@@ -97,55 +98,59 @@ inline depth detect_depth(bool respect_no_color = true) noexcept {
 // the whole run passes through unresolved. Put bold *inside* the color instead --
 // `brgb(r,g,b)` / `color::ansi(true)` fold it into each tier, keeping a clean triple.
 inline std::string collapse(std::string_view s, depth d) {
-	std::string out;
-	out.reserve(s.size());
+	// The result never outgrows the input, so one allocation covers it. Plain text between
+	// escapes is copied in bulk (found with memchr); each run of SGR escapes is walked once,
+	// keeping the escape of the chosen tier as it goes and undoing that when the run turns out
+	// not to be a multiple of three.
+	std::string out(s.size(), '\0');
+	char* w = out.data();
 	const std::size_t pick = d == depth::truecolor ? 2 : d == depth::ansi256 ? 1 : 0;
-	std::size_t i = 0;
-	while (i < s.size()) {
-		if (s[i] == '\033' && i + 1 < s.size() && s[i + 1] == '[') {
-			// Collect a run of consecutive SGR escapes (\033[...m).
-			std::size_t run_begin = i;
-			std::size_t count = 0;
-			std::size_t j = i;
-			while (j < s.size() && s[j] == '\033' && j + 1 < s.size() && s[j + 1] == '[') {
-				std::size_t k = j + 2;
-				while (k < s.size() && s[k] != 'm') {
-					++k;
-				}
-				if (k < s.size()) {
-					++k;  // include the terminating 'm'
-				}
-				++count;
-				j = k;
-			}
-			if (d == depth::none) {
-				// drop the whole run
-			} else if (count % 3 == 0) {
-				// keep the `pick`-th escape of each triple
-				std::size_t p = run_begin;
-				for (std::size_t t = 0; t < count; ++t) {
-					std::size_t kk = p + 2;
-					while (kk < s.size() && s[kk] != 'm') {
-						++kk;
-					}
-					if (kk < s.size()) {
-						++kk;
-					}
-					if (t % 3 == pick) {
-						out.append(s.substr(p, kk - p));
-					}
-					p = kk;
-				}
-			} else {
-				// not a term-color triple run; leave it as-is
-				out.append(s.substr(run_begin, j - run_begin));
-			}
-			i = j;
-		} else {
-			out.push_back(s[i]);
-			++i;
+	const bool strip = d == depth::none;
+	const char* p = s.data();
+	const char* const end = p + s.size();
+	while (p < end) {
+		const char* esc = static_cast<const char*>(std::memchr(p, '\033', static_cast<std::size_t>(end - p)));
+		if (esc == nullptr) {
+			std::memcpy(w, p, static_cast<std::size_t>(end - p));
+			w += end - p;
+			break;
 		}
+		std::memcpy(w, p, static_cast<std::size_t>(esc - p));
+		w += esc - p;
+		p = esc;
+		if (p + 1 == end || p[1] != '[') {
+			*w++ = '\033';  // a lone ESC is plain text
+			++p;
+			continue;
+		}
+		// Collect a run of consecutive SGR escapes (\033[...m).
+		char* const run_out = w;
+		std::size_t count = 0;
+		const char* j = p;
+		while (j + 1 < end && j[0] == '\033' && j[1] == '[') {
+			const char* k = j + 2;
+			while (k < end && *k != 'm') {
+				++k;
+			}
+			if (k < end) {
+				++k;  // include the terminating 'm'
+			}
+			if (!strip && count % 3 == pick) {
+				std::memcpy(w, j, static_cast<std::size_t>(k - j));
+				w += k - j;
+			}
+			++count;
+			j = k;
+		}
+		if (!strip && count % 3 != 0) {
+			// not a term-color triple run; leave it as-is
+			w = run_out;
+			std::memcpy(w, p, static_cast<std::size_t>(j - p));
+			w += j - p;
+		}
+		p = j;
 	}
+	out.resize(static_cast<std::size_t>(w - out.data()));
 	return out;
 }
 

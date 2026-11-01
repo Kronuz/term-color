@@ -24,6 +24,7 @@
 #pragma once
 
 #include <cmath>             // for std::fmod
+#include <cstddef>           // for std::size_t
 #include <cstdint>           // for uint8_t
 #include <format>            // for std::format
 #include <span>              // for std::span
@@ -106,13 +107,22 @@ class color {
 	uint8_t g;
 	uint8_t b;
 
-	auto trueColor(bool bold) {
-		auto trueColor = std::format(ESC "[{};38;2;{};{};{}m", bold ? 1 : 0, r, g, b);
-		return trueColor;
+	// Appends the decimal digits of v (0-255) to w and returns the new end.
+	static char* put(char* w, unsigned v) {
+		if (v >= 100) {
+			*w++ = static_cast<char>('0' + v / 100);
+			v %= 100;
+			*w++ = static_cast<char>('0' + v / 10);
+		} else if (v >= 10) {
+			*w++ = static_cast<char>('0' + v / 10);
+		}
+		*w++ = static_cast<char>('0' + v % 10);
+		return w;
 	}
 
-	auto standard256(bool bold) {
-		uint8_t color = static_cast<uint8_t>((r == g && g == b) ? (
+	// The 256-color palette index nearest to (r, g, b).
+	uint8_t index256() const {
+		return static_cast<uint8_t>((r == g && g == b) ? (
 			r < 6 ? 16 :
 			r > 249 ? 231 :
 			231 + static_cast<int>((r * 25.0f / 255.0f) + 0.5f)
@@ -122,11 +132,10 @@ class color {
 			(static_cast<int>(g / 255.0f * 5.0f + 0.5f) * 6) +
 			(static_cast<int>(b / 255.0f * 5.0f + 0.5f))
 		));
-		auto standard256 = std::format(ESC "[{};38;5;{}m", bold ? 1 : 0, color);
-		return standard256;
 	}
 
-	auto standard16(bool bold) {
+	// The 16-color foreground SGR parameter nearest to (r, g, b).
+	uint8_t sgr16() const {
 		auto _min = r < g ? r : g;
 		auto min = _min < b ? _min : b;
 		auto _max = r > g ? r : g;
@@ -150,9 +159,7 @@ class color {
 		// Map the 0-15 palette index to a real ANSI 16-color foreground SGR:
 		// indices 0-7 -> 30-37 (normal), indices 8-15 -> 90-97 (bright). A
 		// genuine 16-color terminal understands these; it would ignore 38;5;n.
-		uint8_t sgr = static_cast<uint8_t>(color < 8 ? (30 + color) : (90 + (color - 8)));
-		auto standard16 = std::format(ESC "[{};{}m", bold ? 1 : 0, sgr);
-		return standard16;
+		return static_cast<uint8_t>(color < 8 ? (30 + color) : (90 + (color - 8)));
 	}
 
 public:
@@ -174,13 +181,33 @@ public:
 	auto ansi(bool bold = false) {
 		// Worst tier first, matching the compile-time ansi_color::ansi(): a
 		// terminal applies each tier it understands and ends on the best it
-		// supports (truecolor last on a capable terminal).
-		auto ansi = (
-			standard16(bold) +
-			standard256(bold) +
-			trueColor(bold)
-		);
-		return ansi;
+		// supports (truecolor last on a capable terminal). The three escapes
+		// are written into one stack buffer (at most 44 bytes) and copied once.
+		char buf[64];
+		char* w = buf;
+		const char lead = bold ? '1' : '0';
+		auto open = [&] {
+			*w++ = '\033';
+			*w++ = '[';
+			*w++ = lead;
+			*w++ = ';';
+		};
+		open();                                        // ESC[b;<sgr>m
+		w = put(w, sgr16());
+		*w++ = 'm';
+		open();                                        // ESC[b;38;5;<index>m
+		*w++ = '3'; *w++ = '8'; *w++ = ';'; *w++ = '5'; *w++ = ';';
+		w = put(w, index256());
+		*w++ = 'm';
+		open();                                        // ESC[b;38;2;<r>;<g>;<b>m
+		*w++ = '3'; *w++ = '8'; *w++ = ';'; *w++ = '2'; *w++ = ';';
+		w = put(w, r);
+		*w++ = ';';
+		w = put(w, g);
+		*w++ = ';';
+		w = put(w, b);
+		*w++ = 'm';
+		return std::string(buf, static_cast<std::size_t>(w - buf));
 	}
 };
 
