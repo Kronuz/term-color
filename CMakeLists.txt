@@ -13,7 +13,7 @@ include(FetchContent)
 FetchContent_Declare(
   static_string
   GIT_REPOSITORY https://github.com/Kronuz/static-string.git
-  GIT_TAG        cfa812749aab849258fbed076316cd7701cdf948
+  GIT_TAG        46561fad9f26f9b2b613568fe1a3dbcb016d4aba
 )
 FetchContent_MakeAvailable(static_string)
 
