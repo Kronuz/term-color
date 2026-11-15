@@ -134,6 +134,8 @@ colors, and the frozen-original rows.
 
 ## 📚 Documentation
 
+- [Before the Program Runs](https://kronuz.github.io/blog/compile-time-magic/):
+  the Familiars post on why it exists and how it works.
 - [docs/API.md](docs/API.md): named colors, `rgb`/`brgb`, the runtime `color` class,
   and resolving with `apply()` and `collapse()`.
 - [ARCHITECTURE.md](ARCHITECTURE.md): how the three stacked tiers are built and
